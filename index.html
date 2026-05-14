@@ -809,7 +809,7 @@ const LETTER_PHONETICS = {
   'b':'bee',      // /biː/
   'c':'see',      // /siː/
   'd':'dee',      // /diː/
-  'e':'ee',       // /iː/
+  'e':'E',        // /iː/ — 大寫E讀字母名稱，避免ee被TTS拉太長
   'f':'eff',      // /ɛf/  ← ef→eff 雙f讓TTS清楚發 f 音
   'g':'gee',      // /dʒiː/ ← jee→gee 正確英文拼法
   'h':'aitch',    // /eɪtʃ/
@@ -1134,10 +1134,11 @@ let _ttsUnlocked = false;
     if (_ttsUnlocked) return;
     _ttsUnlocked = true;
     // 用無聲 utterance 喚醒 TTS 引擎
-    const u = new SpeechSynthesisUtterance(' ');
+    // ⚠️ 不能在這裡延遲 cancel()：會把使用者真正的發音請求取消掉
+    const u = new SpeechSynthesisUtterance('');
     u.volume = 0; u.rate = 10;
     try { speechSynthesis.speak(u); } catch(_) {}
-    setTimeout(() => { try { speechSynthesis.cancel(); } catch(_) {} }, 100);
+    // 讓它自然結束（空白 utterance 幾乎瞬間完成），不主動 cancel
   }
   ['touchstart', 'click'].forEach(e =>
     document.addEventListener(e, unlock, { once: true, passive: true }));
@@ -1163,41 +1164,62 @@ function _makeUtt(text, rate) {
 }
 
 // ── 依序朗讀（核心）─────────────────────────────────────
-// Android Chrome 規定：speechSynthesis.speak() 必須直接在使用者手勢
-// 的同步呼叫鏈中執行，setTimeout 會讓手勢失效導致靜音。
-// → Android/Desktop：直接呼叫 next()，不加 setTimeout
-// → iOS Safari：cancel() 後需 120ms 緩衝才能再 speak
+// iOS Safari : cancel() 後需 120ms 才能再 speak
+// Android    : 50ms 讓 cancel 生效；onerror 時自動用裝置預設語音重試
+// Desktop    : 直接執行
 function _speakQueue(items, onDone) {
   if (!window.speechSynthesis) { if (onDone) onDone(); return; }
   try { speechSynthesis.resume(); } catch(_) {}
   if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
 
   let idx = 0;
-  function next() {
+
+  // fallback=true 時不指定語音/語言，使用裝置預設（Android 英文未安裝時備援）
+  function next(fallback) {
     if (idx >= items.length) { if (onDone) onDone(); return; }
     const { text, rate } = items[idx++];
-    const u = _makeUtt(text, rate);
+
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = rate;
+    if (!fallback) {
+      const v = _getEnVoice();
+      if (v) { u.voice = v; u.lang = v.lang; }
+      else    { u.lang = 'en-US'; }
+    }
+    // fallback=true：不設 lang/voice，讓裝置用預設語音（至少有聲音）
+
     let done = false;
-    // onend 在部分 Android 版本不觸發，加逾時保底
     const ms = Math.max(3000, text.length * 150 + 1500);
-    const guard = setTimeout(() => { if (!done) { done = true; next(); } }, ms);
-    u.onend  = () => { if (!done) { done = true; clearTimeout(guard); next(); } };
-    u.onerror = () => { if (!done) { done = true; clearTimeout(guard); next(); } };
+    const guard = setTimeout(() => { if (!done) { done = true; next(fallback); } }, ms);
+    u.onend  = () => { if (!done) { done = true; clearTimeout(guard); next(fallback); } };
+    u.onerror = () => {
+      if (!done) {
+        done = true; clearTimeout(guard);
+        if (_isAndroid && !fallback) {
+          // 英文語音失敗 → 退回同一個 item，改用裝置預設語音重試
+          idx--;
+          setTimeout(() => next(true), 50);
+        } else {
+          next(fallback);
+        }
+      }
+    };
     speechSynthesis.speak(u);
   }
 
   function doStart() {
-    _isiOS ? setTimeout(next, 120) : next(); // iOS 需延遲；其餘直接執行
+    if (_isiOS)          setTimeout(() => next(false), 120);
+    else if (_isAndroid) setTimeout(() => next(false),  50); // 讓 cancel 生效
+    else                 next(false);
   }
 
   if (speechSynthesis.getVoices().length > 0) {
     doStart();
   } else {
-    // 語音尚未載入（通常只發生在頁面剛開啟的頭幾秒）
     let started = false;
     const go = () => { if (!started) { started = true; doStart(); } };
     speechSynthesis.addEventListener('voiceschanged', go, { once: true });
-    setTimeout(go, 1000); // fallback
+    setTimeout(go, 1000);
   }
 }
 
