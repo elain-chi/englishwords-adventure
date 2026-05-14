@@ -321,6 +321,8 @@
   .cell-challenge { background:#FFCDD2; border-color:#EF9A9A; }
   .cell-teleport  { background: linear-gradient(135deg,#f8b4f8,#90caf9,#a5f3a5); border-color:#CE93D8; }
   .cell-rest      { background:#E1BEE7; border-color:#CE93D8; }
+  .cell-joke      { background:#FFF3E0; border-color:#FFAB40; }
+  .cell-fortune   { background:#EDE7F6; border-color:#9575CD; }
   .cell-empty     { background:#F5F5F5; border-color:#E0E0E0; }
   .cell-learning  { background: linear-gradient(135deg,#FFD93D,#FF8C42); border-color:#E65100; }
 
@@ -803,7 +805,7 @@ const CHARACTER_EMOJIS = { penguin:"🐧", lion:"🦁", rabbit:"🐰", cat:"🐱
 // 26個英文字母正確美式發音對照（TTS 跨平台版）
 // 使用英文單字而非拼音縮寫，避免 TTS 誤讀
 const LETTER_PHONETICS = {
-  'a':'ay',       // /eɪ/  ← 若仍誤讀可改 'eigh'
+  'a':'A',        // /eɪ/ — 大寫A讓TTS讀字母名稱，避免讀成 ay=/aɪ/
   'b':'bee',      // /biː/
   'c':'see',      // /siː/
   'd':'dee',      // /diː/
@@ -1104,6 +1106,7 @@ function renderWordCard(index) {
 // ===================================================
 // TTS 核心（手機/電腦通用，含 iOS Safari 修正）
 // ===================================================
+// ── TTS 語音清單預載 ──────────────────────────────────────
 let _ttsVoices = [];
 (function _initTTSVoices() {
   if (!window.speechSynthesis) return;
@@ -1111,60 +1114,94 @@ let _ttsVoices = [];
   load();
   speechSynthesis.addEventListener('voiceschanged', load);
 })();
-// iOS Safari 有時會在朗讀中途暫停，定期檢查並 resume
+
+// iOS Safari 有時會在朗讀中途暫停，定期 resume
 setInterval(() => {
   if (window.speechSynthesis && speechSynthesis.speaking && speechSynthesis.paused) {
     speechSynthesis.resume();
   }
 }, 200);
 
+// ── 裝置偵測 ─────────────────────────────────────────────
+const _isAndroid = /android/i.test(navigator.userAgent);
+const _isiOS     = /ipad|iphone|ipod/i.test(navigator.userAgent);
+
+// ── 首次觸碰時解鎖 TTS（Android Chrome 必須在使用者手勢內呼叫）──
+let _ttsUnlocked = false;
+(function _setupTTSUnlock() {
+  if (!window.speechSynthesis) return;
+  function unlock() {
+    if (_ttsUnlocked) return;
+    _ttsUnlocked = true;
+    // 用無聲 utterance 喚醒 TTS 引擎
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0; u.rate = 10;
+    try { speechSynthesis.speak(u); } catch(_) {}
+    setTimeout(() => { try { speechSynthesis.cancel(); } catch(_) {} }, 100);
+  }
+  ['touchstart', 'click'].forEach(e =>
+    document.addEventListener(e, unlock, { once: true, passive: true }));
+})();
+
+// ── 英文語音選取 ──────────────────────────────────────────
 function _getEnVoice() {
-  const voices = speechSynthesis.getVoices();
-  return voices.find(v => v.lang === 'en-US' && !v.localService)  // 優先線上英美語音
-      || voices.find(v => v.lang === 'en-US')                     // 本地 en-US
-      || voices.find(v => v.lang === 'en-GB')                     // 英國英文也可
-      || voices.find(v => v.lang.startsWith('en-'))               // 任何 en- 變體
-      || voices.find(v => v.lang.startsWith('en'))                // en 開頭
-      || voices.find(v => /english/i.test(v.name))                // 名稱含 English
+  const v = speechSynthesis.getVoices();
+  return v.find(x => x.lang === 'en-US' && !x.localService)
+      || v.find(x => x.lang === 'en-US')
+      || v.find(x => x.lang === 'en-GB')
+      || v.find(x => x.lang.startsWith('en-'))
+      || v.find(x => x.lang.startsWith('en'))
       || null;
 }
 function _makeUtt(text, rate) {
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'en-US'; u.rate = rate;
-  const v = _getEnVoice(); if (v) u.voice = v;
+  u.rate = rate;
+  const v = _getEnVoice();
+  if (v) { u.voice = v; u.lang = v.lang; }
+  else    { u.lang = 'en-US'; }
   return u;
 }
-// 依序朗讀陣列中的文字（iOS/Android 用 onend 串鏈，不一次全 push）
-const _isAndroid = /android/i.test(navigator.userAgent);
+
+// ── 依序朗讀（核心）─────────────────────────────────────
+// Android Chrome 規定：speechSynthesis.speak() 必須直接在使用者手勢
+// 的同步呼叫鏈中執行，setTimeout 會讓手勢失效導致靜音。
+// → Android/Desktop：直接呼叫 next()，不加 setTimeout
+// → iOS Safari：cancel() 後需 120ms 緩衝才能再 speak
 function _speakQueue(items, onDone) {
   if (!window.speechSynthesis) { if (onDone) onDone(); return; }
+  try { speechSynthesis.resume(); } catch(_) {}
   if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
+
   let idx = 0;
   function next() {
     if (idx >= items.length) { if (onDone) onDone(); return; }
     const { text, rate } = items[idx++];
     const u = _makeUtt(text, rate);
-    // onend 有時在 Android 不觸發，加 timeout 保底
     let done = false;
-    const guard = setTimeout(() => { if (!done) { done = true; next(); } },
-      Math.max(3000, (text.length * 120) + 1500));
+    // onend 在部分 Android 版本不觸發，加逾時保底
+    const ms = Math.max(3000, text.length * 150 + 1500);
+    const guard = setTimeout(() => { if (!done) { done = true; next(); } }, ms);
     u.onend  = () => { if (!done) { done = true; clearTimeout(guard); next(); } };
     u.onerror = () => { if (!done) { done = true; clearTimeout(guard); next(); } };
     speechSynthesis.speak(u);
   }
-  function startWhenReady() {
-    // Android 在 cancel() 後需要更長等待；iOS 需要 120ms
-    setTimeout(next, _isAndroid ? 350 : 120);
+
+  function doStart() {
+    _isiOS ? setTimeout(next, 120) : next(); // iOS 需延遲；其餘直接執行
   }
-  // 等 voices 載入再開始（Android / iOS 首次）
+
   if (speechSynthesis.getVoices().length > 0) {
-    startWhenReady();
+    doStart();
   } else {
-    speechSynthesis.addEventListener('voiceschanged', startWhenReady, { once: true });
-    setTimeout(startWhenReady, _isAndroid ? 1200 : 700); // fallback
+    // 語音尚未載入（通常只發生在頁面剛開啟的頭幾秒）
+    let started = false;
+    const go = () => { if (!started) { started = true; doStart(); } };
+    speechSynthesis.addEventListener('voiceschanged', go, { once: true });
+    setTimeout(go, 1000); // fallback
   }
 }
-// 偵測是否有英文語音，沒有則提示使用者安裝
+
+// ── 無英文語音時提示安裝 ──────────────────────────────────
 (function _checkEnVoiceOnLoad() {
   if (!window.speechSynthesis) return;
   function check() {
@@ -1174,21 +1211,24 @@ function _speakQueue(items, onDone) {
     if (!hasEn && !sessionStorage.getItem('tts-tip-shown')) {
       sessionStorage.setItem('tts-tip-shown', '1');
       const tip = document.createElement('div');
-      tip.style.cssText = `position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
-        background:#FF6B35;color:white;padding:12px 18px;border-radius:20px;
-        font-size:13px;font-weight:700;z-index:9999;max-width:88%;text-align:center;
-        box-shadow:0 4px 16px rgba(0,0,0,0.25);line-height:1.6;cursor:pointer`;
+      tip.style.cssText = [
+        'position:fixed','bottom:80px','left:50%','transform:translateX(-50%)',
+        'background:#FF6B35','color:white','padding:12px 18px','border-radius:20px',
+        'font-size:13px','font-weight:700','z-index:9999','max-width:88%',
+        'text-align:center','box-shadow:0 4px 16px rgba(0,0,0,.25)',
+        'line-height:1.6','cursor:pointer'
+      ].join(';');
       tip.innerHTML = `⚠️ 未偵測到英文語音，發音功能可能無聲<br>
         <span style="font-size:12px;font-weight:400">
-          請到 手機設定 → 語音服務（Google TTS）→ 下載「英文」語音包
-        </span><br><span style="font-size:11px;opacity:0.8">點此關閉</span>`;
+          手機設定 → 語音服務(Google TTS) → 下載英文語音包
+        </span><br><span style="font-size:11px;opacity:.8">點此關閉</span>`;
       tip.onclick = () => tip.remove();
       document.body.appendChild(tip);
       setTimeout(() => { if (tip.parentNode) tip.remove(); }, 10000);
     }
   }
-  if (speechSynthesis.getVoices().length > 0) { check(); }
-  else { speechSynthesis.addEventListener('voiceschanged', check, { once: true }); }
+  if (speechSynthesis.getVoices().length > 0) check();
+  else speechSynthesis.addEventListener('voiceschanged', check, { once: true });
 })();
 
 function speakWordWithSpelling() {
@@ -1851,9 +1891,44 @@ function triggerChallenge() {
       playSound('wrong');
       if (!gameState.session.wrongWords.includes(wId)) gameState.session.wrongWords.push(wId);
       window._retreatPos = prevPos;
+      const h = gameState.session.hammerCount;
+      const hamDialog = h > 0
+        ? `<div style="background:white;border:3px solid #FF6B35;border-radius:20px;
+                       padding:14px 16px;margin-top:10px;text-align:center">
+             <div style="font-size:32px">🔨</div>
+             <div style="font-size:15px;font-weight:900;color:#333;margin:6px 0">
+               要用一支槌子免退格嗎？
+             </div>
+             <div style="font-size:13px;color:#888;margin-bottom:12px">現有 ${h} 支槌子</div>
+             <div style="display:flex;gap:10px;justify-content:center">
+               <button onclick="challengeUseHammer()"
+                 style="background:#4CAF50;color:white;border:none;border-radius:50px;
+                        padding:10px 22px;font-size:16px;font-weight:900;
+                        font-family:inherit;cursor:pointer;box-shadow:0 4px 0 #388E3C">
+                 ✅ 是，用槌子！
+               </button>
+               <button onclick="doChallengeRetreat()"
+                 style="background:#eee;color:#555;border:none;border-radius:50px;
+                        padding:10px 22px;font-size:16px;font-weight:900;
+                        font-family:inherit;cursor:pointer;box-shadow:0 4px 0 #bbb">
+                 ❌ 否，退格
+               </button>
+             </div>
+           </div>`
+        : `<button class="btn btn-primary" style="margin-top:10px" onclick="doChallengeRetreat()">繼續加油！</button>`;
       document.getElementById('chal-result').innerHTML =
-        `<div class="event-result-banner bad" style="margin-top:12px">😱 哎呀！退回去！<br>正確字母是「${correct}」</div>
-         <button class="btn btn-primary" style="margin-top:8px" onclick="doChallengeRetreat()">繼續加油！</button>`;
+        `<div class="event-result-banner bad" style="margin-top:12px">😱 正確字母是「${correct}」</div>
+         ${hamDialog}`;
+      window.challengeUseHammer = function() {
+        if (gameState.session.hammerCount < 1) return;
+        gameState.session.hammerCount--;
+        updateHUD();
+        document.getElementById('chal-result').innerHTML =
+          `<div class="event-result-banner good" style="margin-top:12px">
+             🔨 槌子擋住了！繼續留在這格！
+           </div>
+           <button class="btn btn-primary" style="margin-top:8px" onclick="hideEventOverlay()">繼續冒險！</button>`;
+      };
     }
   };
   window.doChallengeRetreat = function() {
@@ -2261,6 +2336,74 @@ function startBossBattle() {
 function _bossHearts()  { return '❤️'.repeat(bossState.bossHP)   + '🖤'.repeat(6 - bossState.bossHP); }
 function _playerHearts(){ return '❤️'.repeat(bossState.playerHP) + '🖤'.repeat(3 - bossState.playerHP); }
 
+// 魔王關答錯共用：有槌子時自動跳出是/否對話框
+function _bossWrongAnswer(correctText, wordId) {
+  playSound('wrong');
+  if (wordId && !gameState.session.wrongWords.includes(wordId))
+    gameState.session.wrongWords.push(wordId);
+  const sp = document.getElementById('pl-sprite');
+  if (sp) { sp.style.animation='none'; void sp.offsetWidth; sp.style.animation='playerHit 0.4s ease-out'; }
+  function advanceRound() { bossState.round++; showBossRound(); }
+  setTimeout(() => {
+    const h = gameState.session.hammerCount;
+    if (h > 0) {
+      // 自動跳出槌子確認對話框
+      document.getElementById('event-modal').insertAdjacentHTML('beforeend',
+        `<div class="event-result-banner bad" style="margin-top:10px">💥 被攻擊！${correctText}</div>
+         <div style="background:white;border:3px solid #FF6B35;border-radius:20px;
+                     padding:14px 16px;margin-top:10px;text-align:center">
+           <div style="font-size:30px">🔨</div>
+           <div style="font-size:15px;font-weight:900;color:#333;margin:6px 0">
+             要用一支槌子保住這顆心嗎？
+           </div>
+           <div style="font-size:13px;color:#888;margin-bottom:12px">現有 ${h} 支槌子</div>
+           <div style="display:flex;gap:10px;justify-content:center">
+             <button onclick="window._bossHC(true)"
+               style="background:#4CAF50;color:white;border:none;border-radius:50px;
+                      padding:10px 22px;font-size:16px;font-weight:900;
+                      font-family:inherit;cursor:pointer;box-shadow:0 4px 0 #388E3C">
+               ✅ 是，用槌子！
+             </button>
+             <button onclick="window._bossHC(false)"
+               style="background:#eee;color:#555;border:none;border-radius:50px;
+                      padding:10px 22px;font-size:16px;font-weight:900;
+                      font-family:inherit;cursor:pointer;box-shadow:0 4px 0 #bbb">
+               ❌ 否，扣血
+             </button>
+           </div>
+         </div>`);
+      window._bossHC = function(useHammer) {
+        window._bossHC = null;
+        if (useHammer && gameState.session.hammerCount > 0) {
+          gameState.session.hammerCount--;
+          updateHUD();
+          document.getElementById('event-modal').insertAdjacentHTML('beforeend',
+            `<div style="text-align:center;font-size:15px;color:#2E7D32;
+                         font-weight:900;margin-top:8px">
+               🔨 槌子擋住攻擊！❤️ 保住了！
+             </div>`);
+          setTimeout(advanceRound, 1200);
+        } else {
+          bossState.playerHP--;
+          const hp = document.getElementById('pl-hp');
+          if (hp) hp.textContent = _playerHearts();
+          setTimeout(advanceRound, 900);
+        }
+      };
+    } else {
+      // 沒有槌子：直接扣血，自動繼續
+      bossState.playerHP--;
+      const hp = document.getElementById('pl-hp');
+      if (hp) hp.textContent = _playerHearts();
+      document.getElementById('event-modal').insertAdjacentHTML('beforeend',
+        `<div class="event-result-banner bad" style="margin-top:10px">
+           💥 被攻擊！${correctText}　${_playerHearts()}
+         </div>`);
+      setTimeout(advanceRound, 1800);
+    }
+  }, 400);
+}
+
 function _bossHUD() {
   const char = CHARACTER_EMOJIS[gameState.player.character] || '🐧';
   return `<div class="boss-hud">
@@ -2356,19 +2499,7 @@ function bossAnswer(selId, correctId) {
       setTimeout(showBossRound, 1300);
     }, 400);
   } else {
-    playSound('wrong');
-    bossState.playerHP--;
-    if (!gameState.session.wrongWords.includes(correctId)) gameState.session.wrongWords.push(correctId);
-    const sp = document.getElementById('pl-sprite');
-    if (sp) sp.style.animation = 'playerHit 0.4s ease-out';
-    setTimeout(() => {
-      const hp = document.getElementById('pl-hp');
-      if (hp) hp.textContent = _playerHearts();
-      document.getElementById('event-modal').insertAdjacentHTML('beforeend',
-        `<div class="event-result-banner bad" style="margin-top:10px">💥 被攻擊！正確：「${ALL_WORDS[correctId].english}」　${_playerHearts()}</div>`);
-      bossState.round++;
-      setTimeout(showBossRound, 1800);
-    }, 400);
+    _bossWrongAnswer(`正確：「${ALL_WORDS[correctId].english}」`, correctId);
   }
 }
 
@@ -2383,11 +2514,54 @@ function showBossLightningQ() {
         <div class="event-result-banner good">閃電回合勝利！答對 ${score}/3 ！<br>大魔王 ${_bossHearts()}</div>
         <button class="btn btn-primary" style="margin-top:12px" onclick="_bossLightningNext()">繼續！</button>`);
     } else {
-      playSound('wrong'); bossState.playerHP--;
+      playSound('wrong');
+      const h = gameState.session.hammerCount;
+      const hamDialog = h > 0
+        ? `<div style="background:white;border:3px solid #FF6B35;border-radius:20px;
+                       padding:14px 16px;margin-top:10px;text-align:center">
+             <div style="font-size:30px">🔨</div>
+             <div style="font-size:15px;font-weight:900;color:#333;margin:6px 0">
+               要用一支槌子保住這顆心嗎？
+             </div>
+             <div style="font-size:13px;color:#888;margin-bottom:12px">現有 ${h} 支槌子</div>
+             <div style="display:flex;gap:10px;justify-content:center">
+               <button onclick="window._bossLightHC(true)"
+                 style="background:#4CAF50;color:white;border:none;border-radius:50px;
+                        padding:10px 22px;font-size:16px;font-weight:900;
+                        font-family:inherit;cursor:pointer;box-shadow:0 4px 0 #388E3C">
+                 ✅ 是，用槌子！
+               </button>
+               <button onclick="window._bossLightHC(false)"
+                 style="background:#eee;color:#555;border:none;border-radius:50px;
+                        padding:10px 22px;font-size:16px;font-weight:900;
+                        font-family:inherit;cursor:pointer;box-shadow:0 4px 0 #bbb">
+                 ❌ 否，扣血
+               </button>
+             </div>
+           </div>`
+        : `<button class="btn btn-primary" style="margin-top:12px" onclick="_bossLightningNext()">繼續！</button>`;
       showEventOverlay(`${_bossHUD()}
         <div style="font-size:44px;margin:10px 0">⚡</div>
-        <div class="event-result-banner bad">答對 ${score}/3，被魔王攻擊！<br>${_playerHearts()}</div>
-        <button class="btn btn-primary" style="margin-top:12px" onclick="_bossLightningNext()">繼續！</button>`);
+        <div class="event-result-banner bad">答對 ${score}/3，被魔王攻擊！</div>
+        ${hamDialog}`);
+      window._bossLightHC = function(useHammer) {
+        window._bossLightHC = null;
+        if (useHammer && gameState.session.hammerCount > 0) {
+          gameState.session.hammerCount--;
+          updateHUD();
+          document.getElementById('event-modal').insertAdjacentHTML('beforeend',
+            `<div style="text-align:center;font-size:15px;color:#2E7D32;
+                         font-weight:900;margin-top:8px">
+               🔨 槌子擋住攻擊！❤️ 保住了！
+             </div>
+             <button class="btn btn-primary" style="margin-top:8px" onclick="_bossLightningNext()">繼續！</button>`);
+        } else {
+          bossState.playerHP--;
+          document.getElementById('event-modal').insertAdjacentHTML('beforeend',
+            `<div style="font-size:14px;color:#888;margin-top:4px">${_playerHearts()}</div>
+             <button class="btn btn-primary" style="margin-top:8px" onclick="_bossLightningNext()">繼續！</button>`);
+        }
+      };
     }
     window._bossLightningNext = () => { bossState.round++; showBossRound(); };
     return;
@@ -2481,18 +2655,7 @@ window.bossSpellAnswer = function(selected, correct, wordId) {
     }, 400);
   } else {
     playSound('wrong');
-    bossState.playerHP--;
-    if (!gameState.session.wrongWords.includes(wordId)) gameState.session.wrongWords.push(wordId);
-    const sp = document.getElementById('pl-sprite');
-    if (sp) { sp.style.animation='none'; void sp.offsetWidth; sp.style.animation='playerHit 0.4s ease-out'; }
-    setTimeout(() => {
-      const hp = document.getElementById('pl-hp');
-      if (hp) hp.textContent = _playerHearts();
-      document.getElementById('event-modal').insertAdjacentHTML('beforeend',
-        `<div class="event-result-banner bad" style="margin-top:10px">💥 被攻擊！正確字母是「${correct}」　${_playerHearts()}</div>`);
-      bossState.round++;
-      setTimeout(showBossRound, 1800);
-    }, 400);
+    _bossWrongAnswer(`正確字母是「${correct}」`, wordId);
   }
 };
 
