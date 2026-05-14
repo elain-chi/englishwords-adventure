@@ -630,7 +630,7 @@
         <div class="hud-onigiri"  id="hud-onigiri"  onclick="showAnimalOverlay()">🍙×0</div>
         <div class="hud-position" id="hud-position">0/40</div>
         <button class="hud-home-btn" onclick="resetGame()" title="回首頁">🏠</button>
-        <button class="hud-home-btn" onclick="parentMode()" title="遊戲中心" style="font-size:16px">🎮</button>
+        <button class="hud-home-btn" onclick="parentMode()" title="遊戲中心" style="font-size:16px">⚙️</button>
       </div>
       <!-- Map scroll -->
       <div class="map-scroll" id="map-scroll">
@@ -800,12 +800,35 @@ const ALL_WORD_IDS = [
 ];
 const CHARACTER_EMOJIS = { penguin:"🐧", lion:"🦁", rabbit:"🐰", cat:"🐱" };
 
-// 正確美式英文字母發音（避免 TTS 讀錯 L→N、H→itch、Y→ee）
+// 26個英文字母正確美式發音對照（TTS 跨平台版）
+// 使用英文單字而非拼音縮寫，避免 TTS 誤讀
 const LETTER_PHONETICS = {
-  'a':'ay','b':'bee','c':'see','d':'dee','e':'ee','f':'ef','g':'jee',
-  'h':'aitch','i':'eye','j':'jay','k':'kay','l':'el','m':'em','n':'en',
-  'o':'oh','p':'pee','q':'cue','r':'are','s':'ess','t':'tee',
-  'u':'you','v':'vee','w':'double you','x':'ex','y':'why','z':'zee'
+  'a':'ay',       // /eɪ/  ← 若仍誤讀可改 'eigh'
+  'b':'bee',      // /biː/
+  'c':'see',      // /siː/
+  'd':'dee',      // /diː/
+  'e':'ee',       // /iː/
+  'f':'eff',      // /ɛf/  ← ef→eff 雙f讓TTS清楚發 f 音
+  'g':'gee',      // /dʒiː/ ← jee→gee 正確英文拼法
+  'h':'aitch',    // /eɪtʃ/
+  'i':'eye',      // /aɪ/
+  'j':'jay',      // /dʒeɪ/
+  'k':'kay',      // /keɪ/
+  'l':'ell',      // /ɛl/ ← el→ell 雙l避免TTS讀成N
+  'm':'em',       // /ɛm/
+  'n':'en',       // /ɛn/
+  'o':'oh',       // /oʊ/
+  'p':'pee',      // /piː/
+  'q':'cue',      // /kjuː/
+  'r':'are',      // /ɑːr/
+  's':'ess',      // /ɛs/
+  't':'tee',      // /tiː/
+  'u':'you',      // /juː/
+  'v':'vee',      // /viː/
+  'w':'double-u', // /ˈdʌbəljuː/ ← double you→double-u 標準拼法
+  'x':'ex',       // /ɛks/
+  'y':'why',      // /waɪ/
+  'z':'zee'       // /ziː/
 };
 
 // ===================================================
@@ -1097,9 +1120,12 @@ setInterval(() => {
 
 function _getEnVoice() {
   const voices = speechSynthesis.getVoices();
-  return voices.find(v => v.lang === 'en-US' && !v.localService)
-      || voices.find(v => v.lang === 'en-US')
-      || voices.find(v => v.lang.startsWith('en'))
+  return voices.find(v => v.lang === 'en-US' && !v.localService)  // 優先線上英美語音
+      || voices.find(v => v.lang === 'en-US')                     // 本地 en-US
+      || voices.find(v => v.lang === 'en-GB')                     // 英國英文也可
+      || voices.find(v => v.lang.startsWith('en-'))               // 任何 en- 變體
+      || voices.find(v => v.lang.startsWith('en'))                // en 開頭
+      || voices.find(v => /english/i.test(v.name))                // 名稱含 English
       || null;
 }
 function _makeUtt(text, rate) {
@@ -1108,30 +1134,62 @@ function _makeUtt(text, rate) {
   const v = _getEnVoice(); if (v) u.voice = v;
   return u;
 }
-// 依序朗讀陣列中的文字（iOS 用 onend 串鏈，不一次全 push）
+// 依序朗讀陣列中的文字（iOS/Android 用 onend 串鏈，不一次全 push）
+const _isAndroid = /android/i.test(navigator.userAgent);
 function _speakQueue(items, onDone) {
   if (!window.speechSynthesis) { if (onDone) onDone(); return; }
-  speechSynthesis.cancel();
+  if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
   let idx = 0;
   function next() {
     if (idx >= items.length) { if (onDone) onDone(); return; }
     const { text, rate } = items[idx++];
     const u = _makeUtt(text, rate);
-    u.onend = next; u.onerror = next;
+    // onend 有時在 Android 不觸發，加 timeout 保底
+    let done = false;
+    const guard = setTimeout(() => { if (!done) { done = true; next(); } },
+      Math.max(3000, (text.length * 120) + 1500));
+    u.onend  = () => { if (!done) { done = true; clearTimeout(guard); next(); } };
+    u.onerror = () => { if (!done) { done = true; clearTimeout(guard); next(); } };
     speechSynthesis.speak(u);
   }
   function startWhenReady() {
-    // iOS Safari 在 cancel() 後需要短暫等待才能再 speak
-    setTimeout(next, 120);
+    // Android 在 cancel() 後需要更長等待；iOS 需要 120ms
+    setTimeout(next, _isAndroid ? 350 : 120);
   }
   // 等 voices 載入再開始（Android / iOS 首次）
   if (speechSynthesis.getVoices().length > 0) {
     startWhenReady();
   } else {
     speechSynthesis.addEventListener('voiceschanged', startWhenReady, { once: true });
-    setTimeout(startWhenReady, 700); // fallback（voiceschanged 有時不觸發）
+    setTimeout(startWhenReady, _isAndroid ? 1200 : 700); // fallback
   }
 }
+// 偵測是否有英文語音，沒有則提示使用者安裝
+(function _checkEnVoiceOnLoad() {
+  if (!window.speechSynthesis) return;
+  function check() {
+    const voices = speechSynthesis.getVoices();
+    if (!voices.length) return;
+    const hasEn = voices.some(v => v.lang && v.lang.toLowerCase().startsWith('en'));
+    if (!hasEn && !sessionStorage.getItem('tts-tip-shown')) {
+      sessionStorage.setItem('tts-tip-shown', '1');
+      const tip = document.createElement('div');
+      tip.style.cssText = `position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+        background:#FF6B35;color:white;padding:12px 18px;border-radius:20px;
+        font-size:13px;font-weight:700;z-index:9999;max-width:88%;text-align:center;
+        box-shadow:0 4px 16px rgba(0,0,0,0.25);line-height:1.6;cursor:pointer`;
+      tip.innerHTML = `⚠️ 未偵測到英文語音，發音功能可能無聲<br>
+        <span style="font-size:12px;font-weight:400">
+          請到 手機設定 → 語音服務（Google TTS）→ 下載「英文」語音包
+        </span><br><span style="font-size:11px;opacity:0.8">點此關閉</span>`;
+      tip.onclick = () => tip.remove();
+      document.body.appendChild(tip);
+      setTimeout(() => { if (tip.parentNode) tip.remove(); }, 10000);
+    }
+  }
+  if (speechSynthesis.getVoices().length > 0) { check(); }
+  else { speechSynthesis.addEventListener('voiceschanged', check, { once: true }); }
+})();
 
 function speakWordWithSpelling() {
   const word = learnState.words[learnState.currentWordIndex];
@@ -2840,18 +2898,6 @@ function showGameGuide() {
         </div>
       </div>
 
-      <div style="margin-top:8px;background:#F3E5F5;border-radius:14px;padding:12px">
-        <div style="font-size:14px;font-weight:900;color:#6A1B9A;margin-bottom:6px">🔮 今日運勢卡說明</div>
-        ${[
-          ['🌟','大吉','超級幸運星！心想事成'],
-          ['🧧','中吉','運氣好好，會遇到幸福的事'],
-          ['🌸','小吉','知足常樂，心平氣和最開心'],
-          ['☁️','普普','運氣平平，擁抱爸媽一下吧'],
-          ['🌧️','小凶','運氣不佳，要自動自發做家事喔！'],
-        ].map(([icon,name,desc]) =>
-          `<div style="font-size:13px;color:#333;padding:2px 0">${icon} <b>${name}</b>：${desc}</div>`
-        ).join('')}
-      </div>
     </div>`;
 }
 function toggleSound() {
