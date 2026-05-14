@@ -1147,6 +1147,17 @@ let _ttsUnlocked = false;
 // ── 英文語音選取 ──────────────────────────────────────────
 function _getEnVoice() {
   const v = speechSynthesis.getVoices();
+  if (_isAndroid) {
+    // Android：優先本機語音（遠端網路語音在網路差時會靜默失敗）
+    return v.find(x => x.lang === 'en-US' && x.localService)
+        || v.find(x => x.lang === 'en-GB' && x.localService)
+        || v.find(x => x.lang.startsWith('en-') && x.localService)
+        || v.find(x => x.lang === 'en-US')
+        || v.find(x => x.lang.startsWith('en-'))
+        || v.find(x => x.lang.startsWith('en'))
+        || null;
+  }
+  // Desktop / iOS：優先遠端高品質語音
   return v.find(x => x.lang === 'en-US' && !x.localService)
       || v.find(x => x.lang === 'en-US')
       || v.find(x => x.lang === 'en-GB')
@@ -1189,16 +1200,26 @@ function _speakQueue(items, onDone) {
     // fallback=true：不設 lang/voice，讓裝置用預設語音（至少有聲音）
 
     let done = false;
-    const ms = Math.max(3000, text.length * 150 + 1500);
-    const guard = setTimeout(() => { if (!done) { done = true; next(fallback); } }, ms);
+    // Android 第一次嘗試：2秒內沒反應就視為靜默失敗，切換預設語音
+    const ms = (_isAndroid && !fallback)
+      ? Math.max(2000, text.length * 100 + 800)
+      : Math.max(3000, text.length * 150 + 1500);
+    const guard = setTimeout(() => {
+      if (!done) {
+        done = true;
+        if (_isAndroid && !fallback) {
+          idx--; next(true); // 靜默失敗 → 退回同一項，改用裝置預設語音
+        } else {
+          next(fallback);
+        }
+      }
+    }, ms);
     u.onend  = () => { if (!done) { done = true; clearTimeout(guard); next(fallback); } };
     u.onerror = () => {
       if (!done) {
         done = true; clearTimeout(guard);
         if (_isAndroid && !fallback) {
-          // 英文語音失敗 → 退回同一個 item，改用裝置預設語音重試
-          idx--;
-          setTimeout(() => next(true), 50);
+          idx--; setTimeout(() => next(true), 50); // onerror → 同樣切換預設語音
         } else {
           next(fallback);
         }
@@ -3008,6 +3029,9 @@ function showParentDashboard() {
       <button class="btn btn-secondary" id="pm-sound-btn" onclick="toggleSound()" style="width:100%">
         ${soundEnabled ? '🔊 音效開啟' : '🔇 音效關閉'}
       </button>
+      <button class="btn" style="background:#4CAF50;color:white;width:100%;font-size:16px;padding:12px"
+        onclick="testTTSNow()">🔊 測試英文發音</button>
+      <div id="tts-test-result" style="font-size:13px;text-align:center;color:#666;min-height:18px"></div>
       <button class="btn" style="background:#FF5722;color:white;width:100%;font-size:18px;padding:14px"
         onclick="confirmClearProgress()">🗑️ 清除所有進度</button>
     </div>`;
@@ -3084,6 +3108,48 @@ function showGameGuide() {
       </div>
 
     </div>`;
+}
+function testTTSNow() {
+  const out = document.getElementById('tts-test-result');
+  if (!window.speechSynthesis) {
+    if (out) out.textContent = '❌ 此裝置不支援語音 API';
+    return;
+  }
+  const voices = speechSynthesis.getVoices();
+  const enV = voices.filter(v => v.lang && v.lang.startsWith('en'));
+  const picked = _getEnVoice();
+  if (out) out.textContent = `載入中…（共 ${voices.length} 個語音，英文 ${enV.length} 個）`;
+
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance('hello');
+  u.lang = 'en-US'; u.rate = 0.9;
+  if (picked) { u.voice = picked; u.lang = picked.lang; }
+
+  let replied = false;
+  const tid = setTimeout(() => {
+    if (!replied) {
+      replied = true;
+      if (out) out.innerHTML =
+        `⚠️ 沒有回應（靜默）<br>` +
+        `<span style="font-size:12px">語音總數:${voices.length} 英文:${enV.length}<br>` +
+        `選用:${picked ? picked.name : '無'}<br>` +
+        (enV.length === 0 ? '→ 請安裝 Google TTS 英文語音包' : '→ 已有英文語音但無聲，請回報') +
+        `</span>`;
+    }
+  }, 4000);
+  u.onend = () => {
+    if (!replied) { replied = true; clearTimeout(tid);
+      if (out) out.innerHTML =
+        `✅ 有聲音！語音正常<br>` +
+        `<span style="font-size:12px">使用：${picked ? picked.name+' ('+picked.lang+')' : 'en-US 預設'}</span>`; }
+  };
+  u.onerror = (e) => {
+    if (!replied) { replied = true; clearTimeout(tid);
+      if (out) out.innerHTML =
+        `❌ 錯誤：${e.error}<br>` +
+        `<span style="font-size:12px">語音:${picked ? picked.name : '無'} / 英文語音數:${enV.length}</span>`; }
+  };
+  setTimeout(() => speechSynthesis.speak(u), 80);
 }
 function toggleSound() {
   soundEnabled = !soundEnabled;
