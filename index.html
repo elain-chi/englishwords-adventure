@@ -261,12 +261,7 @@
     .quiz-question-emoji { font-size: 64px; }
   }
 
-  /* ===== GEAR ===== */
-  #parent-gear {
-    position: fixed; bottom: 16px; right: 16px; font-size: 28px;
-    cursor: pointer; opacity: 0.4; z-index: 100; transition: opacity 0.2s;
-  }
-  #parent-gear:hover { opacity: 1; }
+  /* ===== GEAR (removed – 遊戲中心已整合到 HUD 右上角 🎮) ===== */
 
   /* ===== MAP SCREEN ===== */
   #screen-map { padding: 0; justify-content: flex-start; align-items: stretch; }
@@ -563,6 +558,7 @@
   <!-- LEVEL SELECT -->
   <div id="screen-level" class="screen">
     <h2 class="screen-title">選擇關卡</h2>
+    <p style="font-size:14px;color:#aaa;margin-bottom:12px;font-weight:700">🔁 已完成的關卡可以重新挑戰！</p>
     <div class="level-grid">
       <div class="level-card" onclick="selectLevel(1,this)">
         <div class="level-emoji">⭐</div><div class="level-name">Level 1</div>
@@ -657,7 +653,7 @@
   </div>
 
 </div>
-<div id="parent-gear" onclick="parentMode()">⚙️</div>
+<!-- parent-gear removed: 遊戲中心入口已移至 HUD 🎮 按鈕 -->
 
 <script>
 // ===================================================
@@ -808,7 +804,7 @@ const CHARACTER_EMOJIS = { penguin:"🐧", lion:"🦁", rabbit:"🐰", cat:"🐱
 const LETTER_PHONETICS = {
   'a':'ay','b':'bee','c':'see','d':'dee','e':'ee','f':'ef','g':'jee',
   'h':'aitch','i':'eye','j':'jay','k':'kay','l':'el','m':'em','n':'en',
-  'o':'oh','p':'pee','q':'cue','r':'ar','s':'ess','t':'tee',
+  'o':'oh','p':'pee','q':'cue','r':'are','s':'ess','t':'tee',
   'u':'you','v':'vee','w':'double you','x':'ex','y':'why','z':'zee'
 };
 
@@ -871,10 +867,11 @@ function initStart() {
       html += `<button class="saved-progress-btn" onclick="continuePlayer('${p.id}')"
         style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:6px;text-align:left">
         <span style="font-size:28px">${ce}</span>
-        <span>
+        <span style="flex:1">
           <span style="font-weight:900">${p.name}</span>
           <span style="font-size:13px;color:#888;margin-left:6px">已學 ${done}/${total} 字 ｜ ${sessions} 局</span>
         </span>
+        <span style="font-size:13px;color:#FF6B35;font-weight:900;white-space:nowrap">▶ 繼續挑戰</span>
       </button>`;
     });
   }
@@ -1008,6 +1005,12 @@ function startGame() {
     shuffled.slice(6,9), shuffled.slice(9,12)
   ];
   gameState.session.mapCells = buildMapCells();
+  // 預先平均分配幸運格獎勵（避免全部抽到同一種）
+  const luckyCount = gameState.session.mapCells.filter(c => c.type === 'lucky').length;
+  const luckyBase = [];
+  for (let i = 0; i < luckyCount; i++) luckyBase.push(i % 3); // 0=🍀 1=🔨 2=🎲 循環
+  gameState.session.luckyQueue = shuffleArray(luckyBase);
+  gameState.session.luckyQueueIdx = 0;
   startLearningPhase(0);
 }
 
@@ -1075,58 +1078,88 @@ function renderWordCard(index) {
 // ===================================================
 // PRONUNCIATION  (word → letters → word)
 // ===================================================
+// ===================================================
+// TTS 核心（手機/電腦通用，含 iOS Safari 修正）
+// ===================================================
+let _ttsVoices = [];
+(function _initTTSVoices() {
+  if (!window.speechSynthesis) return;
+  const load = () => { _ttsVoices = speechSynthesis.getVoices(); };
+  load();
+  speechSynthesis.addEventListener('voiceschanged', load);
+})();
+// iOS Safari 有時會在朗讀中途暫停，定期檢查並 resume
+setInterval(() => {
+  if (window.speechSynthesis && speechSynthesis.speaking && speechSynthesis.paused) {
+    speechSynthesis.resume();
+  }
+}, 200);
+
+function _getEnVoice() {
+  const voices = speechSynthesis.getVoices();
+  return voices.find(v => v.lang === 'en-US' && !v.localService)
+      || voices.find(v => v.lang === 'en-US')
+      || voices.find(v => v.lang.startsWith('en'))
+      || null;
+}
+function _makeUtt(text, rate) {
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US'; u.rate = rate;
+  const v = _getEnVoice(); if (v) u.voice = v;
+  return u;
+}
+// 依序朗讀陣列中的文字（iOS 用 onend 串鏈，不一次全 push）
+function _speakQueue(items, onDone) {
+  if (!window.speechSynthesis) { if (onDone) onDone(); return; }
+  speechSynthesis.cancel();
+  let idx = 0;
+  function next() {
+    if (idx >= items.length) { if (onDone) onDone(); return; }
+    const { text, rate } = items[idx++];
+    const u = _makeUtt(text, rate);
+    u.onend = next; u.onerror = next;
+    speechSynthesis.speak(u);
+  }
+  function startWhenReady() {
+    // iOS Safari 在 cancel() 後需要短暫等待才能再 speak
+    setTimeout(next, 120);
+  }
+  // 等 voices 載入再開始（Android / iOS 首次）
+  if (speechSynthesis.getVoices().length > 0) {
+    startWhenReady();
+  } else {
+    speechSynthesis.addEventListener('voiceschanged', startWhenReady, { once: true });
+    setTimeout(startWhenReady, 700); // fallback（voiceschanged 有時不觸發）
+  }
+}
+
 function speakWordWithSpelling() {
   const word = learnState.words[learnState.currentWordIndex];
   if (!('speechSynthesis' in window)) return;
-  window.speechSynthesis.cancel();
-
   const btn = document.getElementById('btn-speak-word');
   if (btn) { btn.classList.add('speaking'); btn.textContent = '🔊 播放中...'; }
 
-  const utterances = [];
-
-  // 1. Full word
-  const u1 = new SpeechSynthesisUtterance(word.english);
-  u1.lang = 'en-US'; u1.rate = 0.8;
-  utterances.push(u1);
-
-  // 2. Each letter individually (use phonetic names for correct American pronunciation)
-  for (const ch of word.english) {
-    const letterText = LETTER_PHONETICS[ch.toLowerCase()] || ch;
-    const u = new SpeechSynthesisUtterance(letterText);
-    u.lang = 'en-US'; u.rate = 0.6;
-    utterances.push(u);
-  }
-
-  // 3. Full word again
-  const u2 = new SpeechSynthesisUtterance(word.english);
-  u2.lang = 'en-US'; u2.rate = 0.8;
-  u2.onend = () => {
+  const items = [
+    { text: word.english, rate: 0.8 },
+    ...word.english.split('').map(ch => ({
+      text: LETTER_PHONETICS[ch.toLowerCase()] || ch, rate: 0.6
+    })),
+    { text: word.english, rate: 0.75 }
+  ];
+  _speakQueue(items, () => {
     if (btn) { btn.classList.remove('speaking'); btn.textContent = '🔊 聽單字發音'; }
-  };
-  utterances.push(u2);
-
-  utterances.forEach(u => window.speechSynthesis.speak(u));
+  });
 }
 
 // 單字/句子 TTS（挑戰格、複習格通用）
 function speakWord(text) {
-  if (!('speechSynthesis' in window)) return;
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'en-US'; u.rate = 0.8;
-  window.speechSynthesis.speak(u);
+  _speakQueue([{ text, rate: 0.8 }]);
 }
 
 function speakSentence(sentIndex) {
   const word = learnState.words[learnState.currentWordIndex];
   const text = word.sentences[sentIndex].en;
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'en-US'; u.rate = 0.85;
-    window.speechSynthesis.speak(u);
-  }
+  _speakQueue([{ text, rate: 0.85 }]);
   learnState.sentencesPlayed.add(sentIndex);
   const btn = document.getElementById(`sent-btn-${sentIndex}`);
   if (btn) { btn.classList.add('played'); btn.innerHTML = '✅'; }
@@ -1273,7 +1306,8 @@ function quizComplete() {
 
 const CELL_ICONS = {
   review:'🔁', lucky:'⭐', challenge:'💀',
-  teleport:'🌈', rest:'🏃', empty:'⬜', learning:'📚'
+  teleport:'🌈', rest:'🏃', empty:'⬜', learning:'📚',
+  joke:'😂', fortune:'🔮'
 };
 
 function buildMapCells() {
@@ -1284,7 +1318,8 @@ function buildMapCells() {
     ...Array(10).fill('challenge'),
     ...Array(4).fill('teleport'),
     ...Array(4).fill('rest'),
-    ...Array(4).fill('empty'),
+    ...Array(2).fill('joke'),
+    ...Array(2).fill('fortune'),
   ]; // total 37
   const deck = shuffleArray(pool);
   let di = 0;
@@ -1369,7 +1404,7 @@ function updateHUD() {
   const emoji = CHARACTER_EMOJIS[gameState.player.character] || '🐧';
   document.getElementById('hud-player').textContent   = `${emoji} ${gameState.player.name}`;
   document.getElementById('hud-hammers').textContent  = `🔨×${gameState.session.hammerCount}`;
-  document.getElementById('hud-onigiri').textContent  = `${emoji}×${gameState.session.onigiriCount||0}`;
+  document.getElementById('hud-onigiri').textContent  = `🍙×${gameState.session.animalFed||0}`;
   document.getElementById('hud-position').textContent = `${gameState.session.currentPosition}/40`;
 }
 
@@ -1504,6 +1539,8 @@ function triggerCellEvent(pos) {
     case 'challenge': triggerChallenge(); break;
     case 'teleport':  triggerTeleport();  break;
     case 'rest':      triggerRest();      break;
+    case 'joke':      triggerJoke();      break;
+    case 'fortune':   triggerFortune();   break;
     default:
       resEl.textContent = '⬜ 平安通過！繼續加油！';
       hintEl.textContent = '再擲一次吧！';
@@ -1648,7 +1685,12 @@ function triggerLucky() {
     { id:'hammer',  icon:'🔨', text:'獲得 1 個槌子！',   desc:'太棒了，新槌子！' },
     { id:'double',  icon:'🎲', text:'下一次骰子 ×2！',   desc:'下次投骰加倍！' },
   ];
-  const prize = prizes[Math.floor(Math.random() * prizes.length)];
+  // 從預先平均洗牌的佇列取獎勵，避免同一局全抽到同一種
+  const q = gameState.session.luckyQueue || [];
+  const qi = gameState.session.luckyQueueIdx || 0;
+  const prizeIdx = q.length > 0 ? q[qi % q.length] : Math.floor(Math.random() * 3);
+  gameState.session.luckyQueueIdx = qi + 1;
+  const prize = prizes[prizeIdx];
   let revealed = false;
   showEventOverlay(`
     <span class="event-icon">⭐</span>
@@ -1998,6 +2040,126 @@ function triggerRest() {
 }
 
 // ===================================================
+// 😂 冷笑話格
+// ===================================================
+const JOKES = [
+  '有一天鉛筆跟橡皮擦吵架，最後鉛筆認錯，因為它很會畫下台階。',
+  '為什麼魚不說話？因為一開口就會有泡泡。',
+  '小明跌倒了，大家都笑他，只有地板在安慰他。',
+  '哪種水果最忙？芒果，因為它一直在「忙」。',
+  '為什麼電腦很冷？因為它開了很多視窗。',
+  '麵包走在路上突然餓了，就把自己吃掉一口。',
+  '哪種動物最有禮貌？雞，因為牠會說「咕咕day」。',
+  '為什麼月亮不吃東西？因為它已經很圓了。',
+  '有一天香蕉跌倒了，變成香蕉皮。',
+  '為什麼牛不睡覺？因為牠怕變成蝸牛。',
+  '哪種狗最會唱歌？音樂柴犬。',
+  '咖啡累的時候會變什麼？變成拿鐵。',
+  '小偷最怕什麼麵？關東煮裡的「意麵」。',
+  '為什麼老師愛吃雞？因為可以加分。',
+  '哪種鳥最會考試？會背書的鸚鵡。',
+  '為什麼海星不說秘密？因為牠怕被海參。',
+  '有一天湯圓離家出走，變成珍珠奶茶。',
+  '為什麼手機愛睡覺？因為它常常沒電。',
+  '哪種蔬菜最會聊天？高麗菜，因為很多話。',
+  '小明去買鞋，結果老闆說：你來得真是「鞋」時。',
+  '為什麼書本不敢吵架？因為怕被翻舊帳。',
+  '有一天牙籤失戀了，因為對方覺得它太尖銳。',
+  '哪種飲料最有愛心？可樂，因為會加冰。',
+  '為什麼蜘蛛很會上網？因為牠每天都在結網。',
+  '有一天豆腐撞到牆，結果變成豆花。',
+  '為什麼企鵝不怕冷？因為牠有天然羽絨衣。',
+  '哪種人最愛下雨？洗車店老闆。',
+  '小華問爸爸什麼是反義詞，爸爸說：例如我很閒，你很嫌。',
+  '為什麼鬧鐘很討人厭？因為它總是在關鍵時刻叫。',
+  '有一天地瓜去游泳，結果變成地瓜球。',
+];
+
+function triggerJoke() {
+  // 從 session 的笑話佇列依序取，用完再重洗
+  if (!gameState.session.jokeQueue || gameState.session.jokeQueue.length === 0) {
+    gameState.session.jokeQueue = shuffleArray(JOKES.map((_,i) => i));
+  }
+  const jokeIdx = gameState.session.jokeQueue.shift();
+  const joke = JOKES[jokeIdx];
+  playSound('correct');
+  showEventOverlay(`
+    <span class="event-icon">😂</span>
+    <div class="event-title" style="color:#FF6B35">冷笑話時間！</div>
+    <div style="background:#FFF9C4;border-radius:16px;padding:16px 18px;margin:12px 0;
+                font-size:18px;font-weight:700;color:#333;line-height:1.7;text-align:left">
+      ${joke}
+    </div>
+    <div style="font-size:22px;margin:6px 0">😂🤣😄</div>
+    <button class="btn btn-primary" style="margin-top:8px" onclick="hideEventOverlay()">哈哈，繼續冒險！</button>`);
+}
+
+// ===================================================
+// 🔮 今日運勢格
+// ===================================================
+const FORTUNES = [
+  { name:'大吉', icon:'🌟', color:'#FF6B35', bg:'#FFF3EE', desc:'超級幸運星！心想事成' },
+  { name:'中吉', icon:'🧧', color:'#E53935', bg:'#FFEBEE', desc:'運氣好好，會遇到幸福的事' },
+  { name:'小吉', icon:'🌸', color:'#D81B60', bg:'#FCE4EC', desc:'知足常樂，心平氣和最開心' },
+  { name:'普普', icon:'☁️', color:'#546E7A', bg:'#ECEFF1', desc:'運氣平平，擁抱爸媽一下吧' },
+  { name:'小凶', icon:'🌧️', color:'#6D4C41', bg:'#EFEBE9', desc:'運氣不佳，要自動自發做家事喔！' },
+];
+
+function triggerFortune() {
+  let picked = false;
+
+  showEventOverlay(`
+    <span class="event-icon">🔮</span>
+    <div class="event-title" style="color:#673AB7">今日運勢！</div>
+    <div class="event-subtitle">選一張牌，翻開看看今天的運氣！</div>
+    <div style="display:flex;gap:14px;justify-content:center;margin:18px 0">
+      ${[0,1,2].map(i => `
+        <div id="fortune-card-${i}" onclick="pickFortune(${i})"
+          style="width:96px;height:128px;border-radius:18px;border:3px solid #FFD93D;
+                 background:linear-gradient(135deg,#FFF9C4,#FFD93D);
+                 display:flex;flex-direction:column;align-items:center;justify-content:center;
+                 font-size:40px;cursor:pointer;transition:transform 0.15s;
+                 box-shadow:0 5px 14px rgba(0,0,0,0.13)">❓</div>`).join('')}
+    </div>
+    <div id="fortune-results"></div>
+    <div id="fortune-continue" style="display:none;margin-top:12px">
+      <button class="btn btn-primary" onclick="hideEventOverlay()">繼續冒險！</button>
+    </div>`);
+
+  window.pickFortune = function(idx) {
+    if (picked) return;
+    picked = true;
+    // 隨機決定這張牌的運勢（1/5）
+    const f = FORTUNES[Math.floor(Math.random() * FORTUNES.length)];
+    // 選中的牌翻開
+    const card = document.getElementById(`fortune-card-${idx}`);
+    card.onclick = null;
+    card.style.cssText = `
+      width:96px;height:128px;border-radius:18px;
+      border:3px solid ${f.color};background:${f.bg};
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      cursor:default;box-shadow:0 5px 14px rgba(0,0,0,0.13);
+      animation:bounceIn 0.4s ease-out;`;
+    card.innerHTML = `
+      <div style="font-size:48px;line-height:1">${f.icon}</div>
+      <div style="font-size:22px;font-weight:900;color:${f.color};margin-top:8px">${f.name}</div>`;
+    // 其他兩張變暗、不可點
+    [0,1,2].filter(i => i !== idx).forEach(i => {
+      const c = document.getElementById(`fortune-card-${i}`);
+      if (c) { c.style.opacity = '0.3'; c.style.cursor = 'default'; c.onclick = null; }
+    });
+    playSound('correct');
+    spawnStars();
+    // 下方小字運氣小語
+    const res = document.getElementById('fortune-results');
+    if (res) res.innerHTML = `
+      <div style="font-size:13px;color:#666;font-weight:700;margin-top:10px">${f.desc}</div>`;
+    const cont = document.getElementById('fortune-continue');
+    if (cont) cont.style.display = 'block';
+  };
+}
+
+// ===================================================
 // BOSS BATTLE  (Phase 3)
 // ===================================================
 let bossState = null;
@@ -2090,14 +2252,10 @@ function showBossQuestion(type, word, opts) {
   } else if (type === 'listen') {
     qHtml = `<div style="font-size:36px;margin:6px 0">🔊</div>
       <button class="btn-speak" style="padding:8px 18px;font-size:15px;margin-bottom:8px"
-        onclick="window.speechSynthesis.speak(Object.assign(new SpeechSynthesisUtterance('${word.english}'),{lang:'en-US',rate:0.8}))">
+        onclick="speakWord('${word.english}')">
         再聽一次
       </button>`;
-    setTimeout(() => {
-      const u = new SpeechSynthesisUtterance(word.english);
-      u.lang = 'en-US'; u.rate = 0.8;
-      window.speechSynthesis.speak(u);
-    }, 300);
+    setTimeout(() => speakWord(word.english), 300);
   } else if (type === 'chinese') {
     qHtml = `<div style="font-size:42px;font-weight:900;color:#333;margin:10px 0">${word.chinese}</div>`;
   } else if (type === 'spell') {
@@ -2233,7 +2391,7 @@ function showBossSpellQuestion(word) {
     <div class="boss-q-type">✏️ 拼字填空</div>
     <div style="font-size:52px;margin:6px 0">${word.emoji}</div>
     <button class="btn-speak" style="padding:6px 16px;font-size:14px;margin-bottom:8px"
-      onclick="speechSynthesis.speak(Object.assign(new SpeechSynthesisUtterance('${word.english}'),{lang:'en-US',rate:0.8}))">
+      onclick="speakWord('${word.english}')">
       🔊 聽發音
     </button>
     <div style="font-size:32px;font-weight:900;letter-spacing:8px;color:#333;margin:8px 0;font-family:monospace">${displayWord}</div>
@@ -2430,8 +2588,21 @@ let audioCtx = null;
 let soundEnabled = true;
 function getAudioCtx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  // iOS Safari: AudioContext 初始為 suspended，需要在使用者觸控後 resume
+  if (audioCtx.state === 'suspended') audioCtx.resume();
   return audioCtx;
 }
+// iOS / Android：第一次觸控時解鎖 AudioContext
+(function setupAudioUnlock() {
+  function unlock() {
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    // 也預先建立一次 context 以便後續即時使用
+    try { getAudioCtx(); } catch(e) {}
+  }
+  ['touchstart','touchend','click'].forEach(evt =>
+    document.addEventListener(evt, unlock, { once: true, passive: true })
+  );
+})();
 function playSound(type) {
   if (!soundEnabled) return;
   try {
@@ -2587,9 +2758,9 @@ function showParentDashboard() {
     }).join('');
   }
 
-  document.getElementById('pm-content').innerHTML = `
+  const dashHtml = `
     <div style="font-size:16px;font-weight:900;color:#333;margin-bottom:12px">🎮 冒險者學習進度</div>
-    <div style="max-height:55vh;overflow-y:auto">${playersHtml}</div>
+    <div style="max-height:45vh;overflow-y:auto">${playersHtml}</div>
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
       <button class="btn btn-secondary" id="pm-sound-btn" onclick="toggleSound()" style="width:100%">
         ${soundEnabled ? '🔊 音效開啟' : '🔇 音效關閉'}
@@ -2597,9 +2768,91 @@ function showParentDashboard() {
       <button class="btn" style="background:#FF5722;color:white;width:100%;font-size:18px;padding:14px"
         onclick="confirmClearProgress()">🗑️ 清除所有進度</button>
     </div>`;
+
+  // 若已有 tab-content（從遊戲說明切回），只更新內容區
+  const existingTab = document.getElementById('pm-tab-content');
+  if (existingTab) {
+    existingTab.innerHTML = dashHtml;
+    return;
+  }
+  // 初次開啟：完整渲染含頁籤列
+  document.getElementById('pm-content').innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button onclick="showParentDashboard()"
+        style="flex:1;padding:10px;border:2px solid #FF6B35;border-radius:12px;background:#FFF3EE;
+               color:#FF6B35;font-size:14px;font-weight:900;font-family:inherit;cursor:pointer">
+        🎮 學習進度
+      </button>
+      <button onclick="showGameGuide()"
+        style="flex:1;padding:10px;border:2px solid #4ECDC4;border-radius:12px;background:#E0F7FA;
+               color:#00838F;font-size:14px;font-weight:900;font-family:inherit;cursor:pointer">
+        📖 遊戲說明
+      </button>
+    </div>
+    <div id="pm-tab-content">${dashHtml}</div>`;
 }
 function closeParentMode() {
   document.getElementById('parent-overlay').style.display = 'none';
+}
+
+function showGameGuide() {
+  const tab = document.getElementById('pm-tab-content');
+  if (!tab) return;
+  tab.innerHTML = `
+    <div style="max-height:62vh;overflow-y:auto;padding-right:4px">
+      <div style="background:#FFF9C4;border-radius:14px;padding:14px;margin-bottom:12px">
+        <div style="font-size:15px;font-weight:900;color:#FF6B35;margin-bottom:6px">🎯 遊戲目標</div>
+        <div style="font-size:14px;color:#333;line-height:1.7">
+          在 40 格地圖上擲骰前進，每 10 格學習 3 個英文單字，用你學會的單字武器打倒大魔王！
+        </div>
+      </div>
+
+      <div style="font-size:15px;font-weight:900;color:#333;margin-bottom:8px">🗺️ 格子說明</div>
+      ${[
+        ['📚','學習格','第 10、20、30 格固定出現，學習 3 個新單字並完成小測驗'],
+        ['🔁','複習格','從已學過的單字出題，答對獲得一顆飯糰 🍙'],
+        ['⭐','幸運格','翻 3 張牌選 1 張：🍀 前進 2 格 ／ 🔨 得到槌子 ／ 🎲 下次骰子 ×2'],
+        ['💀','挑戰格','英文字母填空，答對通過，答錯退回前一格'],
+        ['🌈','傳送格','隨機傳送到地圖上的另一個位置'],
+        ['🏃','運動格','翻牌看運動任務，完成才能繼續（跳跳、深蹲、拍手等）'],
+        ['😂','冷笑話格','分享一則超好笑的冷笑話，笑完繼續冒險'],
+        ['🔮','今日運勢格','翻 1 張運勢牌，看看今天是大吉還是小凶！'],
+        ['👑','大魔王','第 40 格！用學過的單字打 6 回合魔王對戰'],
+      ].map(([icon,name,desc]) => `
+        <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #f0f0f0">
+          <span style="font-size:26px;flex-shrink:0;width:36px;text-align:center">${icon}</span>
+          <div>
+            <div style="font-size:14px;font-weight:900;color:#333">${name}</div>
+            <div style="font-size:13px;color:#666;line-height:1.5">${desc}</div>
+          </div>
+        </div>`).join('')}
+
+      <div style="margin-top:12px;background:#E8F5E9;border-radius:14px;padding:12px">
+        <div style="font-size:14px;font-weight:900;color:#2E7D32;margin-bottom:6px">🔨 槌子</div>
+        <div style="font-size:13px;color:#333;line-height:1.6">在挑戰格答錯時消耗 1 個槌子可以免於退格，大魔王戰也能保護自己！</div>
+      </div>
+
+      <div style="margin-top:8px;background:#E3F2FD;border-radius:14px;padding:12px">
+        <div style="font-size:14px;font-weight:900;color:#1565C0;margin-bottom:6px">🍙 飯糰 × 動物養成</div>
+        <div style="font-size:13px;color:#333;line-height:1.6">
+          複習格答對得到飯糰，餵給你的動物夥伴！<br>
+          每餵 3 顆升一級，共 5 個等級：🥚 → 🐣 → 🐥 → 🐧 → ⭐⭐⭐⭐⭐
+        </div>
+      </div>
+
+      <div style="margin-top:8px;background:#F3E5F5;border-radius:14px;padding:12px">
+        <div style="font-size:14px;font-weight:900;color:#6A1B9A;margin-bottom:6px">🔮 今日運勢卡說明</div>
+        ${[
+          ['🌟','大吉','超級幸運星！心想事成'],
+          ['🧧','中吉','運氣好好，會遇到幸福的事'],
+          ['🌸','小吉','知足常樂，心平氣和最開心'],
+          ['☁️','普普','運氣平平，擁抱爸媽一下吧'],
+          ['🌧️','小凶','運氣不佳，要自動自發做家事喔！'],
+        ].map(([icon,name,desc]) =>
+          `<div style="font-size:13px;color:#333;padding:2px 0">${icon} <b>${name}</b>：${desc}</div>`
+        ).join('')}
+      </div>
+    </div>`;
 }
 function toggleSound() {
   soundEnabled = !soundEnabled;
@@ -2608,7 +2861,8 @@ function toggleSound() {
   if (btn) btn.textContent = soundEnabled ? '🔊 音效開啟' : '🔇 音效關閉';
 }
 function confirmClearProgress() {
-  document.getElementById('pm-content').innerHTML = `
+  const target = document.getElementById('pm-tab-content') || document.getElementById('pm-content');
+  target.innerHTML = `
     <div style="text-align:center;padding:16px 0">
       <div style="font-size:60px;margin-bottom:12px">⚠️</div>
       <div style="font-size:20px;font-weight:900;color:#e53935;margin-bottom:8px">確定要清除所有進度嗎？</div>
