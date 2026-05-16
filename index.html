@@ -292,10 +292,17 @@
 
   .map-start-banner {
     background: linear-gradient(135deg,#43e97b,#38f9d7);
-    border-radius: 14px; padding: 10px 16px; margin-bottom: 8px;
-    font-size: 18px; font-weight: 900; color: #1a5c3a;
+    border-radius: 14px; padding: 10px 16px;
+    font-size: 16px; font-weight: 900; color: #1a5c3a;
     display: flex; align-items: center; gap: 8px;
     border: 3px solid #2ecc71; box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+    flex: 1;
+  }
+  .map-timer-box {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    background: #E8F5E9; border-radius: 14px; padding: 10px 8px;
+    font-size: 15px; font-weight: 900; color: #2E7D32;
+    border: 3px solid #4CAF50; box-shadow: 0 3px 8px rgba(0,0,0,0.1);
   }
 
   .map-grid { display: flex; flex-direction: column; gap: 6px; }
@@ -481,6 +488,14 @@
     0%  { transform: scale(1.12); }
     50% { transform: scale(1.25); }
     100%{ transform: scale(1.12); }
+  }
+  @keyframes stepFlash {
+    0%   { box-shadow: 0 0 0 4px #FFD93D, 0 0 12px 6px rgba(255,217,61,0.7); }
+    60%  { box-shadow: 0 0 0 5px #FFD93D, 0 0 18px 8px rgba(255,217,61,0.5); }
+    100% { box-shadow: none; }
+  }
+  .cell-step-flash {
+    animation: stepFlash 0.22s ease-out forwards !important;
   }
   @keyframes luckyFlip {
     from { transform: rotateY(90deg) scale(0.8); }
@@ -896,6 +911,7 @@ function showScreen(id) {
 // ===================================================
 function initStart() {
   loadProgress();
+  registerCustomWords();
   soundEnabled = localStorage.getItem('soundEnabled') !== '0';
   const area = document.getElementById('continue-btn-area');
   let html = '';
@@ -1039,17 +1055,27 @@ function startGame() {
   profile.lastPlayed = Date.now();
   saveProgress();
 
+  // 累積道具：從玩家紀錄讀取上局剩餘的槌子、飯糰
+  const savedHammers   = profile.savedHammerCount  || 0;
+  const savedOnigiri   = profile.savedOnigiriCount || 0;
+  const savedAnimalFed = profile.savedAnimalFed    || 0;
   Object.assign(gameState.session, {
-    currentPosition: 0, hammerCount: 0,
+    currentPosition: 0, hammerCount: savedHammers,
     learnedWords: [], wrongWords: [],
     doubleNextRoll: false, currentGroupIndex: 0,
-    onigiriCount: 0, animalFed: 0, watermelonFed: 0
+    onigiriCount: savedOnigiri, animalFed: savedAnimalFed, watermelonFed: 0,
+    startTime: Date.now()
   });
 
   // Smart word selection: prefer words NOT yet learned by this player
   const learnedSoFar = profile.learnedWordIds || [];
-  const unlearned = ALL_WORD_IDS.filter(id => !learnedSoFar.includes(id));
-  const learned   = ALL_WORD_IDS.filter(id =>  learnedSoFar.includes(id));
+  // 加入此關卡的自訂單字
+  const customWords = loadCustomWords()['level' + gameState.player.level] || [];
+  customWords.forEach(w => { if (w && w.id) ALL_WORDS[w.id] = w; });
+  const customIds = customWords.map(w => w.id).filter(Boolean);
+  const baseIds   = [...ALL_WORD_IDS, ...customIds.filter(id => !ALL_WORD_IDS.includes(id))];
+  const unlearned = baseIds.filter(id => !learnedSoFar.includes(id));
+  const learned   = baseIds.filter(id =>  learnedSoFar.includes(id));
   // Fill up to 12: unlearned first, then repeats if needed
   const pool = [...shuffleArray(unlearned), ...shuffleArray(learned)];
   const shuffled = pool.slice(0, 12);
@@ -1066,6 +1092,7 @@ function startGame() {
   gameState.session.luckyQueue = shuffleArray(luckyBase);
   gameState.session.luckyQueueIdx = 0;
   startLearningPhase(0);
+  startGameTimer();
 }
 
 // ===================================================
@@ -1532,20 +1559,28 @@ function renderMap() {
 
   grid.innerHTML = '';
 
-  // START banner
+  // START banner (半寬) + 遊戲計時器 (半寬)
+  const startRow = document.createElement('div');
+  startRow.style.cssText = 'display:flex;gap:5px;margin-bottom:6px';
   const banner = document.createElement('div');
   banner.className = 'map-start-banner';
   banner.id = 'cell-0';
   banner.innerHTML = pos === 0
-    ? `<span style="font-size:22px">${emoji}</span><span>出發點 🏁</span>`
-    : `<span>🏁 出發點</span>`;
-  grid.appendChild(banner);
+    ? `<span style="font-size:20px">${emoji}</span><span>出發 🏁</span>`
+    : `<span>🏁 出發</span>`;
+  const timerBox = document.createElement('div');
+  timerBox.className = 'map-timer-box';
+  timerBox.id = 'map-game-timer';
+  timerBox.textContent = '⏱ 00:00';
+  startRow.appendChild(banner);
+  startRow.appendChild(timerBox);
+  grid.appendChild(startRow);
 
-  // 5 rows × 8 cells = 40
-  for (let row = 0; row < 5; row++) {
+  // 8 rows × 5 cells = 40
+  for (let row = 0; row < 8; row++) {
     const rowEl = document.createElement('div');
     rowEl.className = 'map-row';
-    const slice = cells.slice(row * 8, row * 8 + 8);
+    const slice = cells.slice(row * 5, row * 5 + 5);
     // Snake: even rows LTR, odd rows RTL
     const display = row % 2 === 0 ? slice : [...slice].reverse();
 
@@ -1554,7 +1589,7 @@ function renderMap() {
       const isCurrent = cell.pos === pos;
       const isPassed  = cell.pos < pos;
       const isBoss    = cell.type === 'boss';
-      el.className = `map-cell cell-${cell.type}${isBoss ? ' cell-boss-finish' : ''}${isCurrent ? ' current-pos' : ''}${isPassed ? ' cell-passed' : ''}`;
+      el.className = `map-cell ${isBoss ? 'cell-boss-finish' : 'cell-' + cell.type}${isCurrent ? ' current-pos' : ''}${isPassed ? ' cell-passed' : ''}`;
       el.id = `cell-${cell.pos}`;
       el.innerHTML = isBoss
         ? `<div class="cell-icon" style="font-size:clamp(18px,3.2vw,28px)">👹</div>
@@ -1575,9 +1610,30 @@ function renderMap() {
 function updateHUD() {
   const emoji = CHARACTER_EMOJIS[gameState.player.character] || '🐧';
   document.getElementById('hud-player').textContent   = `${emoji} ${gameState.player.name}`;
-  document.getElementById('hud-hammers').textContent  = `🔨×${gameState.session.hammerCount}`;
-  document.getElementById('hud-onigiri').textContent  = `🍙×${gameState.session.animalFed||0}`;
+  document.getElementById('hud-hammers').textContent = `🔨×${gameState.session.hammerCount}`;
+  const fedTotal = gameState.session.animalFed || 0;
+  const fedThisLevel = fedTotal % ANIMAL_LEVEL_NEED;
+  document.getElementById('hud-onigiri').innerHTML = `🍙×${fedThisLevel} ${getAnimalEmoji()}`;
   document.getElementById('hud-position').textContent = `${gameState.session.currentPosition}/40`;
+}
+
+let _gameTimerInterval = null;
+function startGameTimer() {
+  clearInterval(_gameTimerInterval);
+  _gameTimerInterval = setInterval(updateGameTimer, 1000);
+  updateGameTimer();
+}
+function updateGameTimer() {
+  const el = document.getElementById('map-game-timer');
+  if (!el) return;
+  const elapsed = Math.floor((Date.now() - (gameState.session.startTime || Date.now())) / 1000);
+  const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+  const s = String(elapsed % 60).padStart(2, '0');
+  el.textContent = `⏱ ${m}:${s}`;
+}
+function stopGameTimer() {
+  clearInterval(_gameTimerInterval);
+  _gameTimerInterval = null;
 }
 
 function scrollToCurrentCell() {
@@ -1640,17 +1696,23 @@ function movePlayer(totalSteps) {
     gameState.session.currentPosition = newPos;
     renderMap();
 
-    // Pop animation on current cell
+    // 叩叩音效 + 黃色光暈外框
+    playSound('step');
     const el = document.getElementById(`cell-${newPos}`);
     if (el) {
-      el.style.animation = 'none';
+      el.classList.remove('cell-step-flash');
       void el.offsetWidth; // reflow
-      el.style.animation = 'cellPop 0.25s ease-out';
+      el.classList.add('cell-step-flash');
+      setTimeout(() => el.classList.remove('cell-step-flash'), 230);
     }
+
+    const passingCell = gameState.session.mapCells[newPos - 1];
+    const isLearningCell = newPos === 10 || newPos === 20 || newPos === 30
+      || (passingCell && passingCell.type === 'learning');
 
     if (step < totalSteps && newPos < 40) {
       // Stop at learning checkpoints even when passing through
-      if (newPos === 10 || newPos === 20 || newPos === 30) {
+      if (isLearningCell) {
         setTimeout(() => triggerCellEvent(newPos), 500);
       } else {
         setTimeout(doStep, 270);
@@ -1911,6 +1973,13 @@ function triggerChallenge() {
   const wordPool = wrongIds.length ? wrongIds : learnedIds;
   const wordId = wordPool[Math.floor(Math.random() * wordPool.length)];
   const word = ALL_WORDS[wordId];
+  const prevPos = Math.max(0, gameState.session.currentPosition - 1);
+
+  // 50% 機率：句子填空題（需有例句）
+  if (word.sentences && word.sentences.length > 0 && Math.random() < 0.5) {
+    triggerSentenceChallenge(word, wordId, learnedIds, prevPos);
+    return;
+  }
 
   // 選一個隨機位置的字母挖空（不選第一個字）
   const blankIdx = word.english.length > 2
@@ -1928,7 +1997,6 @@ function triggerChallenge() {
   const letterOpts = shuffleArray([correctLetter, ...wrongLetters]);
 
   let answered = false;
-  const prevPos = Math.max(0, gameState.session.currentPosition - 1);
 
   showEventOverlay(`
     <span class="event-icon">💀</span>
@@ -1964,13 +2032,15 @@ function triggerChallenge() {
       const animalEmoji = charMap[charKey] || '🐧';
       const animalName  = nameMap[charKey] || '夥伴';
       document.getElementById('chal-result').innerHTML = `
-        <div class="event-result-banner good" style="margin-top:12px">✅ 答對了！勇敢通過挑戰！</div>
-        <div style="text-align:center;padding-top:10px;position:relative">
-          <span id="chal-animal-big" style="font-size:56px;display:block;animation:bounceIn 0.4s ease-out both">${animalEmoji}</span>
-          <span id="chal-melon-big"  style="font-size:44px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍉</span>
-          <div style="font-size:18px;font-weight:900;color:#2E7D32;margin-top:4px">獲得一片西瓜！</div>
-          <button class="btn btn-green" id="chal-feed-btn" onclick="challengeFeedWatermelon()" style="margin-top:10px">
-            ${animalEmoji} 餵${animalName}西瓜！
+        <div class="event-result-banner good" style="margin-top:12px">✅ 答對了！獲得一片西瓜！🍉</div>
+        <div style="text-align:center;padding-top:10px">
+          <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:10px">
+            <span id="chal-animal-big" style="font-size:64px;animation:bounceIn 0.4s ease-out both">${animalEmoji}</span>
+            <span id="chal-happy-notes" style="font-size:28px;line-height:1.4;opacity:0;transition:opacity 0.3s">🎵<br>🎶</span>
+          </div><br>
+          <span id="chal-melon-big" style="font-size:40px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍉</span>
+          <button class="btn btn-green" id="chal-feed-btn" onclick="challengeFeedWatermelon()" style="margin-top:10px;display:block;width:100%">
+            餵${animalName}
           </button>
         </div>`;
     } else {
@@ -2024,6 +2094,124 @@ function triggerChallenge() {
   };
 }
 
+// ── 📝 挑戰格：句子填空題 ──────────────────────────────────────
+function triggerSentenceChallenge(word, wordId, learnedIds, prevPos) {
+  const sent = word.sentences[Math.floor(Math.random() * word.sentences.length)];
+
+  // 把單字在例句中挖空
+  const blankEn = sent.en.replace(new RegExp('\\b' + word.english + '\\b', 'gi'), '___');
+
+  // 3 個選項：正確單字 + 2 個干擾詞（來自已學單字）
+  const otherIds = learnedIds.filter(id => id !== wordId);
+  const distractors = shuffleArray(otherIds).slice(0, 2)
+    .map(id => ALL_WORDS[id]?.english).filter(Boolean);
+  const fallbacks = ['apple','ball','cup','fish','tree','star'];
+  while (distractors.length < 2) distractors.push(fallbacks[distractors.length]);
+  const options = shuffleArray([word.english, ...distractors.slice(0, 2)]);
+
+  const charKey   = gameState.player.character || 'penguin';
+  const charMap   = { penguin:'🐧', lion:'🦁', rabbit:'🐰', cat:'🐱' };
+  const nameMap   = { penguin:'企鵝', lion:'獅子', rabbit:'兔兔', cat:'貓咪' };
+  const animalEmoji = charMap[charKey] || '🐧';
+  const animalName  = nameMap[charKey] || '夥伴';
+
+  let answered = false;
+
+  const safeEn = sent.en.replace(/'/g, "\\'");
+  showEventOverlay(`
+    <span class="event-icon">💀</span>
+    <div class="event-title">挑戰格！</div>
+    <div class="event-subtitle">選出正確的單字！答錯會退後喔！</div>
+    <div style="font-size:40px;margin:6px 0">${word.emoji}</div>
+    <div style="background:#F8F9FA;border-radius:14px;padding:12px 14px;margin:8px 0;text-align:left">
+      <div style="font-size:18px;font-weight:900;color:#333;line-height:1.6">${blankEn}</div>
+      <div style="font-size:13px;color:#888;margin-top:4px">${sent.zh}</div>
+    </div>
+    <button class="btn btn-secondary" style="margin-bottom:10px;font-size:16px;padding:8px 20px"
+      onclick="speakWord('${safeEn}')">🔊 聽例句</button>
+    <div class="lucky-cards" style="margin-top:4px;flex-wrap:wrap;gap:8px">
+      ${options.map(opt => `
+        <div class="lucky-card" data-word="${opt}"
+             style="font-size:14px;font-weight:900;padding:10px 4px;min-width:72px;word-break:break-all"
+             onclick="challengeWordAnswer('${opt.replace(/'/g,"\\'")}','${word.english.replace(/'/g,"\\'")}','${wordId}')">
+          ${opt}
+        </div>`).join('')}
+    </div>
+    <div id="chal-result"></div>`);
+
+  setTimeout(() => speakWord(sent.en), 400);
+
+  window.challengeWordAnswer = function(selected, correct, wId) {
+    if (answered) return;
+    answered = true;
+    document.querySelectorAll('#cell-event-overlay .lucky-card').forEach(c => {
+      c.onclick = null;
+      if (c.dataset.word === correct) c.classList.add('revealed');
+      else if (c.dataset.word === selected && selected !== correct) c.classList.add('dim');
+    });
+    if (selected === correct) {
+      playSound('correct'); spawnStars();
+      document.getElementById('chal-result').innerHTML = `
+        <div class="event-result-banner good" style="margin-top:12px">✅ 答對了！獲得一片西瓜！🍉</div>
+        <div style="text-align:center;padding-top:10px">
+          <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:10px">
+            <span id="chal-animal-big" style="font-size:64px;animation:bounceIn 0.4s ease-out both">${animalEmoji}</span>
+            <span id="chal-happy-notes" style="font-size:28px;line-height:1.4;opacity:0;transition:opacity 0.3s">🎵<br>🎶</span>
+          </div><br>
+          <span id="chal-melon-big" style="font-size:40px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍉</span>
+          <button class="btn btn-green" id="chal-feed-btn" onclick="challengeFeedWatermelon()" style="margin-top:10px;display:block;width:100%">
+            餵${animalName}
+          </button>
+        </div>`;
+    } else {
+      playSound('wrong');
+      if (!gameState.session.wrongWords.includes(wId)) gameState.session.wrongWords.push(wId);
+      window._retreatPos = prevPos;
+      const h = gameState.session.hammerCount;
+      const hamDialog = h > 0
+        ? `<div style="background:white;border:3px solid #FF6B35;border-radius:20px;
+                       padding:14px 16px;margin-top:10px;text-align:center">
+             <div style="font-size:32px">🔨</div>
+             <div style="font-size:15px;font-weight:900;color:#333;margin:6px 0">要用一支槌子免退格嗎？</div>
+             <div style="font-size:13px;color:#888;margin-bottom:12px">現有 ${h} 支槌子</div>
+             <div style="display:flex;gap:10px;justify-content:center">
+               <button onclick="challengeUseHammer()"
+                 style="background:#4CAF50;color:white;border:none;border-radius:50px;
+                        padding:10px 22px;font-size:16px;font-weight:900;
+                        font-family:inherit;cursor:pointer;box-shadow:0 4px 0 #388E3C">
+                 ✅ 是，用槌子！
+               </button>
+               <button onclick="doChallengeRetreat()"
+                 style="background:#eee;color:#555;border:none;border-radius:50px;
+                        padding:10px 22px;font-size:16px;font-weight:900;
+                        font-family:inherit;cursor:pointer;box-shadow:0 4px 0 #bbb">
+                 ❌ 否，退格
+               </button>
+             </div>
+           </div>`
+        : `<button class="btn btn-primary" style="margin-top:10px" onclick="doChallengeRetreat()">繼續加油！</button>`;
+      document.getElementById('chal-result').innerHTML =
+        `<div class="event-result-banner bad" style="margin-top:12px">😱 正確答案是「${correct}」</div>
+         ${hamDialog}`;
+      window.challengeUseHammer = function() {
+        if (gameState.session.hammerCount < 1) return;
+        gameState.session.hammerCount--;
+        updateHUD();
+        document.getElementById('chal-result').innerHTML =
+          `<div class="event-result-banner good" style="margin-top:12px">
+             🔨 槌子擋住了！繼續留在這格！
+           </div>
+           <button class="btn btn-primary" style="margin-top:8px" onclick="hideEventOverlay()">繼續冒險！</button>`;
+      };
+    }
+  };
+  window.doChallengeRetreat = function() {
+    hideEventOverlay();
+    gameState.session.currentPosition = window._retreatPos;
+    updateHUD(); renderMap();
+  };
+}
+
 // ── 🍉 挑戰格西瓜餵食 ───────────────────────────────────────
 function spawnNotes() {
   const notes = ['♪','♫','♬','🎵','🎶'];
@@ -2049,25 +2237,20 @@ function challengeFeedWatermelon() {
   if (btn) btn.disabled = true;
   const melonEl  = document.getElementById('chal-melon-big');
   const animalEl = document.getElementById('chal-animal-big');
+  const notesEl  = document.getElementById('chal-happy-notes');
   if (melonEl) melonEl.style.animation = 'onigiriFlying 0.7s ease-in forwards';
   setTimeout(() => {
     if (animalEl) animalEl.style.animation = 'animalMunch 0.5s ease-in-out';
+    if (notesEl)  notesEl.style.opacity   = '1';
     gameState.session.watermelonFed = (gameState.session.watermelonFed || 0) + 1;
-    spawnNotes();
-    // Play a short happy melody
     const happyNotes = [[330,0.5],[392,0.5],[440,0.5],[523,1],[440,0.5],[523,1.5]];
     playMelody(happyNotes, 160);
   }, 650);
   setTimeout(() => {
-    const charKey = gameState.player.character || 'penguin';
-    const charMap = { penguin:'🐧', lion:'🦁', rabbit:'🐰', cat:'🐱' };
-    const animalEmoji = charMap[charKey] || '🐧';
     document.getElementById('event-modal').insertAdjacentHTML('beforeend', `
-      <div style="text-align:center;padding-top:8px">
-        <div style="font-size:18px;font-weight:900;color:#1565C0;margin-bottom:6px">
-          ${animalEmoji} ♪♫ 心情超好！ ♫♪
-        </div>
-        <button class="btn btn-primary" style="margin-top:4px" onclick="hideEventOverlay()">繼續冒險！</button>
+      <div style="text-align:center;margin-top:8px">
+        <div style="font-size:16px;font-weight:900;color:#1565C0;margin-bottom:8px">♪♫ 心情超好！ ♫♪</div>
+        <button class="btn btn-primary" onclick="hideEventOverlay()">繼續冒險！</button>
       </div>`);
   }, 1400);
 }
@@ -2797,6 +2980,17 @@ window.bossSpellAnswer = function(selected, correct, wordId) {
 
 function bossBattleEnd(playerWon) {
   clearCellTimer();
+  stopGameTimer();
+  // 累積道具：無論勝敗，保留槌子與飯糰到下一局
+  try {
+    const prof = getCurrentProfile();
+    if (prof) {
+      prof.savedHammerCount  = gameState.session.hammerCount  || 0;
+      prof.savedOnigiriCount = gameState.session.onigiriCount || 0;
+      prof.savedAnimalFed    = gameState.session.animalFed    || 0;
+      saveProgress();
+    }
+  } catch(e) {}
   diceRolling = false;
   if (playerWon) {
     playSound('hammer'); spawnStars();
@@ -2920,6 +3114,7 @@ window.checkWwrAll = function(total) {
 
 function resetGame() {
   clearCellTimer();
+  stopGameTimer();
   clearSavedSession();
   const ov = document.getElementById('cell-event-overlay');
   if (ov) ov.style.display = 'none';
@@ -2998,6 +3193,16 @@ function playSound(type) {
         g.gain.exponentialRampToValueAtTime(0.001, now+i*0.07+0.1);
         o.start(now+i*0.07); o.stop(now+i*0.07+0.12);
       }
+    } else if (type === 'step') {
+      // 叩叩：短促木頭打擊音
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(320, now);
+      o.frequency.exponentialRampToValueAtTime(160, now + 0.08);
+      g.gain.setValueAtTime(0.22, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      o.start(now); o.stop(now + 0.1);
     }
   } catch(e) {}
 }
@@ -3022,6 +3227,106 @@ function spawnStars() {
     c.appendChild(el);
   }
   setTimeout(() => c.remove(), 1500);
+}
+
+// ===================================================
+// 自訂單字庫
+// ===================================================
+const SENTENCE_TEMPLATES = {
+  1: [
+    (w,c) => ({ en:`I see a ${w}.`,   zh:`我看到${c}。` }),
+    (w,c) => ({ en:`I like ${w}!`,    zh:`我喜歡${c}！` }),
+    (w,c) => ({ en:`This is a ${w}.`, zh:`這是${c}。` }),
+    (w,c) => ({ en:`Look, a ${w}!`,   zh:`看，是${c}！` }),
+    (w,c) => ({ en:`I have a ${w}.`,  zh:`我有${c}。` }),
+    (w,c) => ({ en:`I love ${w}!`,    zh:`我愛${c}！` }),
+    (w,c) => ({ en:`I want ${w}!`,    zh:`我想要${c}！` }),
+    (w,c) => ({ en:`My ${w}!`,        zh:`我的${c}！` }),
+  ],
+  2: [
+    (w,c) => ({ en:`The ${w} is so cute!`,      zh:`這個${c}好可愛！` }),
+    (w,c) => ({ en:`Do you see the ${w}?`,       zh:`你看到${c}了嗎？` }),
+    (w,c) => ({ en:`Can I have the ${w}?`,       zh:`我可以要${c}嗎？` }),
+    (w,c) => ({ en:`I really love ${w}!`,        zh:`我真的很愛${c}！` }),
+    (w,c) => ({ en:`Please give me the ${w}!`,   zh:`請給我${c}！` }),
+    (w,c) => ({ en:`The ${w} is very nice!`,     zh:`這個${c}很棒！` }),
+    (w,c) => ({ en:`I want to see the ${w}!`,    zh:`我想看${c}！` }),
+    (w,c) => ({ en:`I think ${w} is very fun!`,  zh:`我覺得${c}很好玩！` }),
+  ],
+  3: [
+    (w,c) => ({ en:`I am so happy to see the ${w}!`,         zh:`我好開心能看到${c}！` }),
+    (w,c) => ({ en:`There is a beautiful ${w} over there!`,  zh:`那裡有一個美麗的${c}！` }),
+    (w,c) => ({ en:`I have been looking for a ${w} today!`,  zh:`我今天一直在找${c}！` }),
+    (w,c) => ({ en:`My favorite thing to see is the ${w}!`,  zh:`我最喜歡看的就是${c}！` }),
+    (w,c) => ({ en:`Can you help me find the ${w} please?`,  zh:`你可以幫我找${c}嗎？` }),
+    (w,c) => ({ en:`I think a ${w} is the best thing ever!`, zh:`我覺得${c}是最棒的！` }),
+    (w,c) => ({ en:`Every day I dream of playing with ${w}!`,zh:`每天我都夢想和${c}玩！` }),
+    (w,c) => ({ en:`I want to have my very own ${w} someday!`,zh:`我有一天想擁有自己的${c}！` }),
+  ],
+};
+
+function generateSentences(english, chinese, level) {
+  const templates = SENTENCE_TEMPLATES[level] || SENTENCE_TEMPLATES[1];
+  const pool = shuffleArray([...templates]);
+  return [pool[0](english, chinese), pool[1](english, chinese)];
+}
+
+function loadCustomWords() {
+  try {
+    const d = localStorage.getItem('englishAdventure_customWords');
+    return d ? JSON.parse(d) : { level1:[], level2:[], level3:[] };
+  } catch(e) { return { level1:[], level2:[], level3:[] }; }
+}
+function saveCustomWords(data) {
+  localStorage.setItem('englishAdventure_customWords', JSON.stringify(data));
+}
+
+function registerCustomWords() {
+  const cw = loadCustomWords();
+  Object.values(cw).flat().forEach(w => { if (w && w.id) ALL_WORDS[w.id] = w; });
+}
+
+function addCustomWord(english, chinese, emoji, level) {
+  english = english.trim().toLowerCase();
+  chinese = chinese.trim();
+  emoji   = (emoji||'').trim() || '📝';
+  if (!english || !chinese) return false;
+  const cw   = loadCustomWords();
+  const key  = 'level' + level;
+  const id   = 'CUSTOM_L' + level + '_' + Date.now();
+  const sents = generateSentences(english, chinese, level);
+  const word  = { id, english, chinese, emoji,
+    category:'custom', letters: english.split(''),
+    sentences: sents };
+  cw[key].push(word);
+  saveCustomWords(cw);
+  ALL_WORDS[id] = word;
+  return true;
+}
+
+function deleteCustomWord(id, level) {
+  const cw  = loadCustomWords();
+  const key = 'level' + level;
+  cw[key]   = cw[key].filter(w => w.id !== id);
+  saveCustomWords(cw);
+  delete ALL_WORDS[id];
+}
+
+function importCustomCSV(file, level, onDone) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const lines  = e.target.result.split('\n').filter(l => l.trim());
+    let added = 0;
+    lines.forEach(line => {
+      const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g,''));
+      if (cols.length >= 2 && cols[0] && cols[1]) {
+        const emoji = cols[2] || '📝';
+        if (addCustomWord(cols[0], cols[1], emoji, level)) added++;
+      }
+    });
+    if (onDone) onDone(added);
+  };
+  reader.readAsText(file, 'UTF-8');
 }
 
 // ===================================================
@@ -3071,12 +3376,14 @@ function resumeSession() {
   renderMap();
   const btn = document.getElementById('dice-btn');
   if (btn) btn.disabled = false;
+  startGameTimer();
 }
 
 // ===================================================
 // 進度設置
 // ===================================================
 function parentMode() {
+  document.getElementById('pm-content').innerHTML = '';
   document.getElementById('parent-overlay').style.display = 'flex';
   showParentDashboard();
 }
@@ -3137,20 +3444,202 @@ function showParentDashboard() {
   }
   // 初次開啟：完整渲染含頁籤列
   document.getElementById('pm-content').innerHTML = `
-    <div style="display:flex;gap:8px;margin-bottom:14px">
+    <div style="display:flex;gap:6px;margin-bottom:14px">
       <button onclick="showParentDashboard()"
-        style="flex:1;padding:10px;border:2px solid #FF6B35;border-radius:12px;background:#FFF3EE;
-               color:#FF6B35;font-size:14px;font-weight:900;font-family:inherit;cursor:pointer">
+        style="flex:1;padding:9px 4px;border:2px solid #FF6B35;border-radius:12px;background:#FFF3EE;
+               color:#FF6B35;font-size:13px;font-weight:900;font-family:inherit;cursor:pointer">
         🎮 學習進度
       </button>
+      <button onclick="showCustomWordBank(1)"
+        style="flex:1;padding:9px 4px;border:2px solid #4CAF50;border-radius:12px;background:#E8F5E9;
+               color:#2E7D32;font-size:13px;font-weight:900;font-family:inherit;cursor:pointer">
+        📚 自訂單字
+      </button>
       <button onclick="showGameGuide()"
-        style="flex:1;padding:10px;border:2px solid #4ECDC4;border-radius:12px;background:#E0F7FA;
-               color:#00838F;font-size:14px;font-weight:900;font-family:inherit;cursor:pointer">
-        📖 遊戲說明
+        style="flex:1;padding:9px 4px;border:2px solid #4ECDC4;border-radius:12px;background:#E0F7FA;
+               color:#00838F;font-size:13px;font-weight:900;font-family:inherit;cursor:pointer">
+        📖 說明
       </button>
     </div>
     <div id="pm-tab-content">${dashHtml}</div>`;
 }
+function showCustomWordBank(level) {
+  level = level || 1;
+  const cw    = loadCustomWords();
+  const words = cw['level' + level] || [];
+  const tabStyle = lv =>
+    lv === level
+      ? 'background:#4CAF50;color:white;border-color:#4CAF50'
+      : 'background:#E8F5E9;color:#2E7D32;border-color:#4CAF50';
+
+  const wordListHtml = words.length === 0
+    ? '<div style="color:#aaa;font-size:14px;text-align:center;padding:16px">還沒有自訂單字</div>'
+    : words.map(w => `
+        <div style="display:flex;align-items:center;gap:8px;padding:8px;background:#F8F9FA;
+                    border-radius:12px;margin-bottom:6px">
+          <span style="font-size:24px">${w.emoji}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:16px;font-weight:900">${w.english}</div>
+            <div style="font-size:13px;color:#888">${w.chinese}</div>
+          </div>
+          <button onclick="deleteCustomWord('${w.id}',${level});showCustomWordBank(${level})"
+            style="background:#FFEBEE;color:#c62828;border:none;border-radius:8px;
+                   padding:4px 10px;font-size:13px;font-weight:900;font-family:inherit;cursor:pointer">
+            刪除
+          </button>
+        </div>`).join('');
+
+  const html = `
+    <div style="font-size:15px;font-weight:900;color:#2E7D32;margin-bottom:10px">📚 自訂單字庫</div>
+    <div style="display:flex;gap:6px;margin-bottom:12px">
+      ${[1,2,3].map(lv=>`
+        <button onclick="showCustomWordBank(${lv})"
+          style="flex:1;padding:8px;border:2px solid #4CAF50;border-radius:10px;
+                 font-size:13px;font-weight:900;font-family:inherit;cursor:pointer;${tabStyle(lv)}">
+          Level ${lv}
+        </button>`).join('')}
+    </div>
+
+    <div style="background:#F8F9FA;border-radius:14px;padding:12px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:900;color:#333;margin-bottom:8px">➕ 新增單字</div>
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <input id="cw-emoji" value="📝" maxlength="2"
+          style="width:46px;text-align:center;font-size:20px;padding:6px;border:2px solid #ddd;
+                 border-radius:10px;font-family:inherit;outline:none"/>
+        <input id="cw-en" placeholder="英文單字" maxlength="20"
+          style="flex:1;font-size:16px;padding:8px 10px;border:2px solid #ddd;
+                 border-radius:10px;font-family:inherit;outline:none"/>
+        <input id="cw-zh" placeholder="中文" maxlength="10"
+          style="width:80px;font-size:16px;padding:8px 10px;border:2px solid #ddd;
+                 border-radius:10px;font-family:inherit;outline:none"/>
+      </div>
+      <div id="cw-preview" style="font-size:12px;color:#888;min-height:30px;margin-bottom:6px;
+           background:white;border-radius:8px;padding:6px 8px;line-height:1.6"></div>
+      <div style="display:flex;gap:8px">
+        <button onclick="previewCustomWord(${level})"
+          style="flex:1;padding:10px;background:#E8F5E9;color:#2E7D32;border:2px solid #4CAF50;
+                 border-radius:10px;font-size:14px;font-weight:900;font-family:inherit;cursor:pointer">
+          🔍 預覽例句
+        </button>
+        <button onclick="submitCustomWord(${level})"
+          style="flex:1;padding:10px;background:#4CAF50;color:white;border:none;
+                 border-radius:10px;font-size:14px;font-weight:900;font-family:inherit;cursor:pointer">
+          ✅ 新增
+        </button>
+      </div>
+    </div>
+
+    <div style="margin-bottom:10px">
+      <label style="display:flex;align-items:center;gap:8px;background:#EDE7F6;border:2px solid #9575CD;
+                    border-radius:12px;padding:10px 12px;cursor:pointer">
+        <span style="font-size:18px">📂</span>
+        <div>
+          <div style="font-size:14px;font-weight:900;color:#4527A0">匯入 CSV 檔（電腦版）</div>
+          <div style="font-size:11px;color:#888">格式：英文,中文,表情符號（可省略）</div>
+        </div>
+        <input type="file" accept=".csv,.txt" style="display:none"
+          onchange="handleCSVImport(event,${level})"/>
+      </label>
+      <div id="cw-import-result" style="font-size:13px;color:#4CAF50;text-align:center;margin-top:4px"></div>
+    </div>
+
+    <div style="font-size:13px;font-weight:900;color:#333;margin-bottom:6px">
+      📋 已新增（${words.length} 個單字）
+    </div>
+    <div style="max-height:200px;overflow-y:auto">${wordListHtml}</div>`;
+
+  const tab = document.getElementById('pm-tab-content');
+  if (tab) { tab.innerHTML = html; return; }
+  document.getElementById('pm-content').innerHTML = `
+    <div style="display:flex;gap:6px;margin-bottom:14px">
+      <button onclick="showParentDashboard()"
+        style="flex:1;padding:9px 4px;border:2px solid #FF6B35;border-radius:12px;background:#FFF3EE;
+               color:#FF6B35;font-size:13px;font-weight:900;font-family:inherit;cursor:pointer">
+        🎮 學習進度
+      </button>
+      <button onclick="showCustomWordBank(1)"
+        style="flex:1;padding:9px 4px;border:2px solid #4CAF50;border-radius:12px;background:#4CAF50;
+               color:white;font-size:13px;font-weight:900;font-family:inherit;cursor:pointer">
+        📚 自訂單字
+      </button>
+      <button onclick="showGameGuide()"
+        style="flex:1;padding:9px 4px;border:2px solid #4ECDC4;border-radius:12px;background:#E0F7FA;
+               color:#00838F;font-size:13px;font-weight:900;font-family:inherit;cursor:pointer">
+        📖 說明
+      </button>
+    </div>
+    <div id="pm-tab-content">${html}</div>`;
+}
+
+let _cwPreviewState = null;
+
+function previewCustomWord(level) {
+  const en = (document.getElementById('cw-en')?.value || '').trim().toLowerCase();
+  const zh = (document.getElementById('cw-zh')?.value || '').trim();
+  const prev = document.getElementById('cw-preview');
+  if (!en || !zh) { if (prev) prev.textContent = '請先輸入英文和中文'; return; }
+  const templates = SENTENCE_TEMPLATES[level] || SENTENCE_TEMPLATES[1];
+  const pool = shuffleArray([...Array(templates.length).keys()]);
+  _cwPreviewState = { en, zh, level, pool, slots: [pool[0], pool[1]], next: 2 };
+  renderCwPreview();
+}
+
+function refreshCwSentence(slotIdx) {
+  if (!_cwPreviewState) return;
+  const s = _cwPreviewState;
+  const templates = SENTENCE_TEMPLATES[s.level] || SENTENCE_TEMPLATES[1];
+  const other = slotIdx === 0 ? s.slots[1] : s.slots[0];
+  for (let tries = 0; tries < templates.length; tries++) {
+    const candidate = s.pool[s.next % s.pool.length];
+    s.next++;
+    if (candidate !== other) { s.slots[slotIdx] = candidate; break; }
+  }
+  renderCwPreview();
+}
+
+function renderCwPreview() {
+  const s = _cwPreviewState;
+  const prev = document.getElementById('cw-preview');
+  if (!s || !prev) return;
+  const templates = SENTENCE_TEMPLATES[s.level] || SENTENCE_TEMPLATES[1];
+  const s0 = templates[s.slots[0]](s.en, s.zh);
+  const s1 = templates[s.slots[1]](s.en, s.zh);
+  const btnStyle = `background:#FFF9C4;border:1.5px solid #FFD93D;border-radius:8px;
+    padding:2px 8px;font-size:12px;font-weight:900;font-family:inherit;cursor:pointer;
+    color:#7B4A00;white-space:nowrap;flex-shrink:0`;
+  prev.innerHTML =
+    `<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:6px">
+       <div style="flex:1;font-size:12px;color:#333">💬 ${s0.en}<br><span style="color:#aaa">（${s0.zh}）</span></div>
+       <button onclick="refreshCwSentence(0)" style="${btnStyle}">🔄 換</button>
+     </div>
+     <div style="display:flex;align-items:flex-start;gap:6px">
+       <div style="flex:1;font-size:12px;color:#333">💬 ${s1.en}<br><span style="color:#aaa">（${s1.zh}）</span></div>
+       <button onclick="refreshCwSentence(1)" style="${btnStyle}">🔄 換</button>
+     </div>`;
+}
+
+function submitCustomWord(level) {
+  const en    = document.getElementById('cw-en')?.value || '';
+  const zh    = document.getElementById('cw-zh')?.value || '';
+  const emoji = document.getElementById('cw-emoji')?.value || '📝';
+  if (!en.trim() || !zh.trim()) {
+    alert('請填寫英文單字和中文翻譯！'); return;
+  }
+  if (addCustomWord(en, zh, emoji, level)) {
+    showCustomWordBank(level);
+  }
+}
+
+function handleCSVImport(event, level) {
+  const file = event.target.files[0];
+  if (!file) return;
+  importCustomCSV(file, level, count => {
+    const el = document.getElementById('cw-import-result');
+    if (el) el.textContent = `✅ 成功匯入 ${count} 個單字！`;
+    setTimeout(() => showCustomWordBank(level), 800);
+  });
+}
+
 function closeParentMode() {
   document.getElementById('parent-overlay').style.display = 'none';
 }
