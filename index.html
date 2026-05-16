@@ -36,6 +36,7 @@
   .btn-primary   { background: #FF6B35; color: white; }
   .btn-secondary { background: #4ECDC4; color: white; }
   .btn-green     { background: #4CAF50; color: white; }
+  .btn-yellow    { background: #FFD93D; color: #7B4A00; }
   .btn-answer {
     background: white; color: #333; border: 3px solid #ddd; border-radius: 20px;
     padding: 16px 20px; font-size: 20px; font-weight: 700; width: 100%;
@@ -265,7 +266,9 @@
 
   /* ===== MAP SCREEN ===== */
   #screen-map { padding: 0; justify-content: flex-start; align-items: stretch; }
-  .map-wrapper { display: flex; flex-direction: column; width: 100%; height: 100vh; overflow: hidden; position: relative; }
+  .map-wrapper { display: flex; flex-direction: column; width: 100%;
+    height: 100vh; height: 100dvh; /* dvh 修正 iOS/Android 瀏覽器底列遮擋 */
+    overflow: hidden; position: relative; }
 
   .map-hud {
     background: white; border-bottom: 3px solid #FFD93D;
@@ -421,28 +424,51 @@
 
   /* Dice bar */
   .dice-bar {
-    background: white; border-top: 3px solid #FFD93D;
-    padding: 10px 16px; display: flex; align-items: center; gap: 12px;
-    flex-shrink: 0; box-shadow: 0 -4px 16px rgba(0,0,0,0.1); z-index: 10;
+    background: white;
+    border-top: 4px solid #FFD93D;
+    padding: 12px 16px 16px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    flex-shrink: 0;
+    box-shadow: 0 -6px 20px rgba(0,0,0,0.12); z-index: 10;
   }
+  .dice-bar-top { display: flex; align-items: center; gap: 12px; width: 100%; }
   .dice-face {
-    font-size: 48px; line-height: 1; flex-shrink: 0;
-    transition: transform 0.1s;
-    display: inline-block;
+    font-size: 44px; line-height: 1; flex-shrink: 0;
+    transition: transform 0.1s; display: inline-block;
   }
   .dice-face.rolling { animation: diceRoll 0.55s ease-out; }
   .dice-info { flex: 1; min-width: 0; }
-  .dice-result-text { font-size: 17px; font-weight: 900; color: #333; }
-  .dice-hint { font-size: 13px; color: #999; margin-top: 2px; }
+  .dice-result-text { font-size: 16px; font-weight: 900; color: #333; }
+  .dice-hint { font-size: 12px; color: #999; margin-top: 2px; }
   .dice-btn {
-    background: linear-gradient(135deg,#FF6B35,#FF4081); color: white;
-    border: none; border-radius: 20px; font-size: 17px; font-weight: 900;
-    font-family: inherit; padding: 13px 22px; cursor: pointer;
-    box-shadow: 0 5px 0 rgba(0,0,0,0.18); flex-shrink: 0;
+    background: linear-gradient(135deg, #FF6B35, #FF4081); color: white;
+    border: none; border-radius: 50px; font-size: 20px; font-weight: 900;
+    font-family: inherit; padding: 16px 0; cursor: pointer;
+    box-shadow: 0 6px 0 rgba(0,0,0,0.2); width: 100%;
     transition: transform 0.1s, box-shadow 0.1s;
+    letter-spacing: 1px;
   }
-  .dice-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0,0,0,0.18); }
-  .dice-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: 0 5px 0 rgba(0,0,0,0.1); }
+  .dice-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,0.2); }
+  .dice-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: 0 6px 0 rgba(0,0,0,0.1); }
+
+  /* Boss cell inside grid (position 40) */
+  .cell-boss-finish {
+    background: linear-gradient(135deg,#ff6b6b,#ffd93d,#ff6b6b);
+    border: 3px solid #c0392b !important;
+    box-shadow: 0 0 0 2px #FFD93D;
+    animation: bossGlow 1.8s ease-in-out infinite;
+  }
+  @keyframes bossGlow {
+    0%,100% { box-shadow: 0 0 0 2px #FFD93D, 0 0 8px rgba(255,107,107,0.4); }
+    50%      { box-shadow: 0 0 0 3px #FF4081, 0 0 16px rgba(255,107,107,0.8); }
+  }
+
+  /* Music note animation for watermelon feeding */
+  @keyframes noteFloat {
+    0%   { transform: translate(0,0) rotate(0deg) scale(1); opacity:1; }
+    100% { transform: translate(var(--nx),var(--ny)) rotate(var(--nr)) scale(0.5); opacity:0; }
+  }
+  .note-particle { position:absolute; pointer-events:none; font-size:24px; animation:noteFloat 1.2s ease-out forwards; }
 
   @keyframes diceRoll {
     0%  { transform: rotate(0deg)   scale(1);   }
@@ -483,8 +509,9 @@
     .map-scroll { padding: 8px 8px 12px; }
     .map-row { gap: 4px; }
     .map-grid { gap: 4px; }
-    .dice-btn { padding: 12px 16px; font-size: 15px; }
-    .dice-face { font-size: 38px; }
+    .dice-bar { padding: 10px 14px 14px; gap: 6px; }
+    .dice-btn { font-size: 18px; padding: 14px 0; }
+    .dice-face { font-size: 36px; }
   }
 </style>
 </head>
@@ -640,10 +667,12 @@
       </div>
       <!-- Dice bar -->
       <div class="dice-bar">
-        <div class="dice-face" id="dice-face">🎲</div>
-        <div class="dice-info">
-          <div class="dice-result-text" id="dice-result-text">準備好了嗎？擲骰子出發！</div>
-          <div class="dice-hint"        id="dice-hint"></div>
+        <div class="dice-bar-top">
+          <div class="dice-face" id="dice-face">🎲</div>
+          <div class="dice-info">
+            <div class="dice-result-text" id="dice-result-text">準備好了嗎？擲骰子出發！</div>
+            <div class="dice-hint"        id="dice-hint"></div>
+          </div>
         </div>
         <button class="dice-btn" id="dice-btn" onclick="rollDice()">🎲 擲骰子！</button>
       </div>
@@ -1014,7 +1043,7 @@ function startGame() {
     currentPosition: 0, hammerCount: 0,
     learnedWords: [], wrongWords: [],
     doubleNextRoll: false, currentGroupIndex: 0,
-    onigiriCount: 0, animalFed: 0
+    onigiriCount: 0, animalFed: 0, watermelonFed: 0
   });
 
   // Smart word selection: prefer words NOT yet learned by this player
@@ -1059,6 +1088,13 @@ function startLearningPhase(groupIndex) {
 }
 
 function renderWordCard(index) {
+  // 切換單字時立刻清除前一個 TTS，避免音訊排隊導致下一個卡住
+  if (window.speechSynthesis) {
+    speechSynthesis.cancel();
+  }
+  const speakBtn = document.getElementById('btn-speak-word');
+  if (speakBtn) { speakBtn.classList.remove('speaking'); speakBtn.textContent = '🔊 聽單字發音'; }
+
   const word = learnState.words[index];
   learnState.sentencesPlayed = new Set();
 
@@ -1448,26 +1484,28 @@ function quizComplete() {
 const CELL_ICONS = {
   review:'🔁', lucky:'⭐', challenge:'💀',
   teleport:'🌈', rest:'🏃', empty:'⬜', learning:'📚',
-  joke:'😂', fortune:'🔮'
+  joke:'😂', fortune:'🔮', boss:'👹'
 };
 
 function buildMapCells() {
   // 37 random cells (positions 1-40, skipping fixed checkpoints 10/20/30)
   const pool = [
-    ...Array(10).fill('review'),
+    ...Array(9).fill('review'),
     ...Array(5).fill('lucky'),
-    ...Array(10).fill('challenge'),
+    ...Array(9).fill('challenge'),
     ...Array(4).fill('teleport'),
     ...Array(4).fill('rest'),
     ...Array(2).fill('joke'),
-    ...Array(2).fill('fortune'),
-  ]; // total 37
+    ...Array(3).fill('fortune'),
+  ]; // total 36（40 格 - 3 學習格 - 1 boss 格）
   const deck = shuffleArray(pool);
   let di = 0;
   const cells = [];
   for (let pos = 1; pos <= 40; pos++) {
     if (pos === 10 || pos === 20 || pos === 30) {
       cells.push({ pos, type: 'learning' });
+    } else if (pos === 40) {
+      cells.push({ pos, type: 'boss' });
     } else {
       cells.push({ pos, type: deck[di++] });
     }
@@ -1512,30 +1550,23 @@ function renderMap() {
     const display = row % 2 === 0 ? slice : [...slice].reverse();
 
     display.forEach(cell => {
-      const el       = document.createElement('div');
+      const el        = document.createElement('div');
       const isCurrent = cell.pos === pos;
       const isPassed  = cell.pos < pos;
-      el.className = `map-cell cell-${cell.type}${isCurrent ? ' current-pos' : ''}${isPassed ? ' cell-passed' : ''}`;
+      const isBoss    = cell.type === 'boss';
+      el.className = `map-cell cell-${cell.type}${isBoss ? ' cell-boss-finish' : ''}${isCurrent ? ' current-pos' : ''}${isPassed ? ' cell-passed' : ''}`;
       el.id = `cell-${cell.pos}`;
-      el.innerHTML = `
-        <div class="cell-num">${cell.pos}</div>
-        <div class="cell-icon">${CELL_ICONS[cell.type] || '❓'}</div>
-        ${isCurrent ? `<div class="cell-player">${emoji}</div>` : ''}
-      `;
+      el.innerHTML = isBoss
+        ? `<div class="cell-icon" style="font-size:clamp(18px,3.2vw,28px)">👹</div>
+           <div class="cell-num" style="color:#c0392b;font-weight:900">BOSS</div>
+           ${isCurrent ? `<div class="cell-player">${emoji}</div>` : ''}`
+        : `<div class="cell-num">${cell.pos}</div>
+           <div class="cell-icon">${CELL_ICONS[cell.type] || '❓'}</div>
+           ${isCurrent ? `<div class="cell-player">${emoji}</div>` : ''}`;
       rowEl.appendChild(el);
     });
     grid.appendChild(rowEl);
   }
-
-  // BOSS row at bottom
-  const bossRow = document.createElement('div');
-  bossRow.className = 'map-row map-boss-row';
-  bossRow.innerHTML = `
-    <div class="map-cell cell-boss" id="cell-boss">
-      <div class="cell-icon">👹</div>
-      <div class="cell-num">BOSS</div>
-    </div>`;
-  grid.appendChild(bossRow);
 
   updateHUD();
   scrollToCurrentCell();
@@ -1926,10 +1957,22 @@ function triggerChallenge() {
       else if (c.dataset.letter === selected && selected !== correct) c.classList.add('dim');
     });
     if (selected === correct) {
-      playSound('correct');
-      document.getElementById('chal-result').innerHTML =
-        `<div class="event-result-banner good" style="margin-top:12px">✅ 答對了！勇敢通過挑戰！</div>
-         <button class="btn btn-primary" style="margin-top:8px" onclick="hideEventOverlay()">繼續冒險！</button>`;
+      playSound('correct'); spawnStars();
+      const charKey  = gameState.player.character || 'penguin';
+      const charMap  = { penguin:'🐧', lion:'🦁', rabbit:'🐰', cat:'🐱' };
+      const nameMap  = { penguin:'企鵝', lion:'獅子', rabbit:'兔兔', cat:'貓咪' };
+      const animalEmoji = charMap[charKey] || '🐧';
+      const animalName  = nameMap[charKey] || '夥伴';
+      document.getElementById('chal-result').innerHTML = `
+        <div class="event-result-banner good" style="margin-top:12px">✅ 答對了！勇敢通過挑戰！</div>
+        <div style="text-align:center;padding-top:10px;position:relative">
+          <span id="chal-animal-big" style="font-size:56px;display:block;animation:bounceIn 0.4s ease-out both">${animalEmoji}</span>
+          <span id="chal-melon-big"  style="font-size:44px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍉</span>
+          <div style="font-size:18px;font-weight:900;color:#2E7D32;margin-top:4px">獲得一片西瓜！</div>
+          <button class="btn btn-green" id="chal-feed-btn" onclick="challengeFeedWatermelon()" style="margin-top:10px">
+            ${animalEmoji} 餵${animalName}西瓜！
+          </button>
+        </div>`;
     } else {
       playSound('wrong');
       if (!gameState.session.wrongWords.includes(wId)) gameState.session.wrongWords.push(wId);
@@ -1979,6 +2022,54 @@ function triggerChallenge() {
     gameState.session.currentPosition = window._retreatPos;
     updateHUD(); renderMap();
   };
+}
+
+// ── 🍉 挑戰格西瓜餵食 ───────────────────────────────────────
+function spawnNotes() {
+  const notes = ['♪','♫','♬','🎵','🎶'];
+  const modal  = document.getElementById('event-modal');
+  if (!modal) return;
+  const rect = modal.getBoundingClientRect();
+  for (let i = 0; i < 8; i++) {
+    const el = document.createElement('span');
+    el.className = 'note-particle';
+    el.textContent = notes[Math.floor(Math.random() * notes.length)];
+    const nx = (Math.random() - 0.5) * 120 + 'px';
+    const ny = -(40 + Math.random() * 80) + 'px';
+    const nr = (Math.random() - 0.5) * 60 + 'deg';
+    el.style.cssText = `left:${Math.random()*80+10}%;top:40%;--nx:${nx};--ny:${ny};--nr:${nr};`;
+    el.style.animationDelay = (i * 0.1) + 's';
+    modal.appendChild(el);
+    setTimeout(() => el.remove(), 1400);
+  }
+}
+
+function challengeFeedWatermelon() {
+  const btn = document.getElementById('chal-feed-btn');
+  if (btn) btn.disabled = true;
+  const melonEl  = document.getElementById('chal-melon-big');
+  const animalEl = document.getElementById('chal-animal-big');
+  if (melonEl) melonEl.style.animation = 'onigiriFlying 0.7s ease-in forwards';
+  setTimeout(() => {
+    if (animalEl) animalEl.style.animation = 'animalMunch 0.5s ease-in-out';
+    gameState.session.watermelonFed = (gameState.session.watermelonFed || 0) + 1;
+    spawnNotes();
+    // Play a short happy melody
+    const happyNotes = [[330,0.5],[392,0.5],[440,0.5],[523,1],[440,0.5],[523,1.5]];
+    playMelody(happyNotes, 160);
+  }, 650);
+  setTimeout(() => {
+    const charKey = gameState.player.character || 'penguin';
+    const charMap = { penguin:'🐧', lion:'🦁', rabbit:'🐰', cat:'🐱' };
+    const animalEmoji = charMap[charKey] || '🐧';
+    document.getElementById('event-modal').insertAdjacentHTML('beforeend', `
+      <div style="text-align:center;padding-top:8px">
+        <div style="font-size:18px;font-weight:900;color:#1565C0;margin-bottom:6px">
+          ${animalEmoji} ♪♫ 心情超好！ ♫♪
+        </div>
+        <button class="btn btn-primary" style="margin-top:4px" onclick="hideEventOverlay()">繼續冒險！</button>
+      </div>`);
+  }, 1400);
 }
 
 // ── 🌈 傳送格 ────────────────────────────────────────────
@@ -2167,7 +2258,7 @@ const REST_SONGS = [
 // ── 🏃 運動格 ────────────────────────────────────────────
 const EXERCISE_CARDS = [
   { icon:'🦘', title:'開闔跳躍',  desc:'跳 10 下！', action:'開闔跳躍 10 下', count:10, unit:'下' },
-  { icon:'💪', title:'伏地挺身', desc:'做 5 下！',  action:'伏地挺身 5 下', count:5,  unit:'下' },
+  { icon:'🧘', title:'棒式撐體', desc:'撐 20 秒！', action:'棒式 20 秒',   count:20, unit:'秒' },
   { icon:'💧', title:'喝水時間',  desc:'喝 3 口水！', action:'喝水 3 口',    count:3,  unit:'口' },
 ];
 
@@ -2501,7 +2592,9 @@ function showBossQuestion(type, word, opts) {
       </button>`;
     setTimeout(() => speakWord(word.english), 300);
   } else if (type === 'chinese') {
-    qHtml = `<div style="font-size:42px;font-weight:900;color:#333;margin:10px 0">${word.chinese}</div>`;
+    qHtml = `<div style="font-size:42px;font-weight:900;color:#333;margin:10px 0">${word.chinese}</div>
+      <button class="btn-speak" style="padding:8px 18px;font-size:15px;margin-bottom:8px"
+        onclick="speakWord('${word.english}')">🔊 聽發音</button>`;
   } else if (type === 'spell') {
     const hidden = word.english.slice(0,-1) + '_';
     qHtml = `<div style="font-size:36px;font-weight:900;letter-spacing:6px;color:#333;margin:10px 0">${word.emoji} ${hidden}</div>`;
@@ -2613,7 +2706,7 @@ function showBossLightningQ() {
   const word   = bossState.lightningWords[bossState.lightningIdx];
   const wrongs = shuffleArray(Object.values(ALL_WORDS).filter(w => w.id !== word.id)).slice(0, 3);
   const opts   = shuffleArray([word, ...wrongs]);
-  let timeLeft = 3, answered = false;
+  let timeLeft = 6, answered = false;
 
   showEventOverlay(`
     ${_bossHUD()}
@@ -2642,7 +2735,7 @@ function showBossLightningQ() {
     if (answered) { clearCellTimer(); return; }
     timeLeft -= 0.1;
     const bar = document.getElementById('lt-bar');
-    if (bar) bar.style.width = Math.max(0, (timeLeft/3)*100) + '%';
+    if (bar) bar.style.width = Math.max(0, (timeLeft/6)*100) + '%';
     if (timeLeft <= 0) { clearCellTimer(); if (!answered) window._ltAnswer('__timeout__', word.id); }
   }, 100);
 }
