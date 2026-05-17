@@ -64,7 +64,7 @@
   }
 
   /* ===== CHARACTER SELECT ===== */
-  #screen-character { text-align: center; }
+  #screen-character { text-align: center; justify-content: flex-start; padding-top: 28px; padding-bottom: 28px; }
   .screen-title { font-size: clamp(22px, 5vw, 36px); font-weight: 900; color: #333; margin-bottom: 24px; }
   .character-grid {
     display: grid; grid-template-columns: repeat(2, 1fr);
@@ -288,6 +288,22 @@
   }
   .hud-home-btn:hover { background: #FFE0B2; }
 
+  /* ===== GLOBAL NAV (visible on all screens except start & map) ===== */
+  #global-nav {
+    display: none;
+    position: fixed; top: 12px; right: 12px; z-index: 8000;
+    display: flex; gap: 8px;
+  }
+  #global-nav.hidden { display: none !important; }
+  .gnav-btn {
+    background: rgba(255,255,255,0.92); border: 2px solid #ddd;
+    border-radius: 50%; width: 40px; height: 40px; font-size: 18px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15); transition: background 0.2s, transform 0.1s;
+  }
+  .gnav-btn:hover  { background: #FFE0B2; transform: scale(1.1); }
+  .gnav-btn:active { transform: scale(0.95); }
+
   .map-scroll { flex: 1; overflow-y: auto; padding: 12px 12px 16px; }
 
   .map-start-banner {
@@ -310,7 +326,7 @@
   .map-cell {
     flex: 1; aspect-ratio: 1; border-radius: 10px; border: 2px solid transparent;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    position: relative; transition: transform 0.15s; min-width: 0; overflow: hidden;
+    position: relative; transition: transform 0.15s; min-width: 0; overflow: visible;
   }
   .map-cell.current-pos {
     border-color: #333 !important;
@@ -547,7 +563,7 @@
              font-family:inherit;cursor:pointer;font-weight:700;padding:8px 16px;
              border-radius:20px;transition:color 0.2s"
       onmouseover="this.style.color='#666'" onmouseout="this.style.color='#aaa'">
-      🎮 遊戲中心
+      ⚙️ 遊戲中心
     </button>
   </div>
 
@@ -559,7 +575,7 @@
     <div style="max-width:480px;width:100%;margin:0 auto;background:white;
                 border-radius:28px;padding:28px;position:relative;margin-top:24px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
-        <h2 style="font-size:24px;font-weight:900;color:#333">🎮 遊戲中心</h2>
+        <h2 style="font-size:24px;font-weight:900;color:#333">⚙️ 遊戲中心</h2>
         <button onclick="closeParentMode()"
           style="background:#eee;border:none;width:36px;height:36px;border-radius:50%;
                  font-size:20px;cursor:pointer;line-height:1">✕</button>
@@ -650,7 +666,13 @@
   <div id="screen-quiz" class="screen">
     <div class="quiz-title" id="quiz-title">小測驗 🧠</div>
     <div class="quiz-question-emoji" id="quiz-emoji"></div>
-    <div class="quiz-question-text">這個英文單字是？</div>
+    <div id="quiz-chinese" style="font-size:26px;font-weight:900;color:#FF6B35;margin:4px 0 8px;"></div>
+    <button id="quiz-speak-btn" style="background:#E3F2FD;border:2px solid #90CAF9;border-radius:20px;
+      padding:8px 20px;font-size:16px;font-weight:900;font-family:inherit;cursor:pointer;
+      color:#1565C0;margin-bottom:12px" onclick="speakWord(learnState.quizWords[learnState.quizIndex]?.english)">
+      🔊 聽發音
+    </button>
+    <div class="quiz-question-text">選出正確的英文單字！</div>
     <div class="feedback-msg" id="quiz-feedback" style="display:none;"></div>
     <div class="quiz-answers" id="quiz-answers"></div>
   </div>
@@ -700,6 +722,12 @@
 
 </div>
 <!-- parent-gear removed: 遊戲中心入口已移至 HUD 🎮 按鈕 -->
+
+<!-- Global nav: 🏠 + ⚙️ shown on all screens except start & map -->
+<div id="global-nav" class="hidden">
+  <button class="gnav-btn" onclick="goHome()" title="回首頁">🏠</button>
+  <button class="gnav-btn" onclick="parentMode()" title="遊戲中心">⚙️</button>
+</div>
 
 <script>
 // ===================================================
@@ -835,6 +863,471 @@ const SCENES = {
         sentences:[{en:"I help my friend.",zh:"我幫助我的朋友。"},{en:"Helping is good!",zh:"助人為樂！"}],
         letters:["h","e","l","p"] },
     ]
+  },
+  scene_L1_body: {
+    id:"L1_BD", name:"身體部位", nameEn:"Body Parts", emoji:"🧍",
+    words: [
+      { id:"L1_BD_001", english:"head",  chinese:"頭",   emoji:"🗣️", category:"body",
+        sentences:[{en:"My head feels big!",zh:"我的頭感覺好大！"},{en:"Pat your head now!",zh:"現在摸摸你的頭！"}],
+        letters:["h","e","a","d"] },
+      { id:"L1_BD_002", english:"hair",  chinese:"頭髮", emoji:"💇", category:"body",
+        sentences:[{en:"Her hair is long!",zh:"她的頭髮好長！"},{en:"Brush your hair daily!",zh:"每天要梳頭髮！"}],
+        letters:["h","a","i","r"] },
+      { id:"L1_BD_003", english:"eye",   chinese:"眼睛", emoji:"👁️", category:"body",
+        sentences:[{en:"My eyes are brown.",zh:"我的眼睛是棕色的。"},{en:"Close your eyes tight!",zh:"緊緊閉上眼睛！"}],
+        letters:["e","y","e"] },
+      { id:"L1_BD_004", english:"nose",  chinese:"鼻子", emoji:"👃", category:"body",
+        sentences:[{en:"My nose is cold!",zh:"我的鼻子好冷！"},{en:"Smell with your nose!",zh:"用鼻子聞一聞！"}],
+        letters:["n","o","s","e"] },
+      { id:"L1_BD_005", english:"mouth", chinese:"嘴巴", emoji:"👄", category:"body",
+        sentences:[{en:"Open your mouth wide!",zh:"張開你的嘴巴！"},{en:"My mouth loves candy!",zh:"我的嘴巴最愛糖果！"}],
+        letters:["m","o","u","t","h"] },
+      { id:"L1_BD_006", english:"ear",   chinese:"耳朵", emoji:"👂", category:"body",
+        sentences:[{en:"I hear with ears.",zh:"我用耳朵聽聲音。"},{en:"My ears are big!",zh:"我的耳朵好大！"}],
+        letters:["e","a","r"] },
+      { id:"L1_BD_007", english:"hand",  chinese:"手",   emoji:"🖐️", category:"body",
+        sentences:[{en:"Wash your hands now!",zh:"現在去洗手！"},{en:"My hands are warm.",zh:"我的手很溫暖。"}],
+        letters:["h","a","n","d"] },
+      { id:"L1_BD_008", english:"leg",   chinese:"腿",   emoji:"🦵", category:"body",
+        sentences:[{en:"My legs run fast!",zh:"我的腿跑好快！"},{en:"Kick with your legs!",zh:"用腿踢一踢！"}],
+        letters:["l","e","g"] },
+      { id:"L1_BD_009", english:"foot",  chinese:"腳",   emoji:"🦶", category:"body",
+        sentences:[{en:"My foot is wet!",zh:"我的腳濕透了！"},{en:"Stomp your feet hard!",zh:"用力跺跺腳！"}],
+        letters:["f","o","o","t"] },
+      { id:"L1_BD_010", english:"arm",   chinese:"手臂", emoji:"💪", category:"body",
+        sentences:[{en:"I wave my arm.",zh:"我揮動手臂。"},{en:"Strong arms hold bags!",zh:"有力的手臂拿袋子！"}],
+        letters:["a","r","m"] },
+      { id:"L1_BD_011", english:"face",  chinese:"臉",   emoji:"😊", category:"body",
+        sentences:[{en:"Wash your face clean!",zh:"把臉洗乾淨！"},{en:"Your face looks bright!",zh:"你的臉好亮！"}],
+        letters:["f","a","c","e"] },
+      { id:"L1_BD_012", english:"tooth", chinese:"牙齒", emoji:"🦷", category:"body",
+        sentences:[{en:"Brush your teeth daily!",zh:"每天刷牙！"},{en:"My tooth fell out!",zh:"我的牙齒掉了！"}],
+        letters:["t","o","o","t","h"] },
+    ]
+  },
+  scene_L1_numbers: {
+    id:"L1_NM", name:"數字", nameEn:"Numbers", emoji:"🔢",
+    words: [
+      { id:"L1_NM_001", english:"zero",  chinese:"零", emoji:"0️⃣", category:"number",
+        sentences:[{en:"Zero means none left!",zh:"零代表什麼都沒有！"},{en:"I score zero points.",zh:"我得了零分。"}],
+        letters:["z","e","r","o"] },
+      { id:"L1_NM_002", english:"one",   chinese:"一", emoji:"1️⃣", category:"number",
+        sentences:[{en:"I have one cat!",zh:"我有一隻貓！"},{en:"One star shines bright!",zh:"一顆星星閃閃亮！"}],
+        letters:["o","n","e"] },
+      { id:"L1_NM_003", english:"two",   chinese:"二", emoji:"2️⃣", category:"number",
+        sentences:[{en:"I see two dogs!",zh:"我看到兩隻狗！"},{en:"Two eyes blink fast!",zh:"兩隻眼睛快速眨眼！"}],
+        letters:["t","w","o"] },
+      { id:"L1_NM_004", english:"three", chinese:"三", emoji:"3️⃣", category:"number",
+        sentences:[{en:"Three birds sing loud!",zh:"三隻鳥唱得好響！"},{en:"I ate three cakes!",zh:"我吃了三塊蛋糕！"}],
+        letters:["t","h","r","e","e"] },
+      { id:"L1_NM_005", english:"four",  chinese:"四", emoji:"4️⃣", category:"number",
+        sentences:[{en:"Four legs on chair!",zh:"椅子有四條腿！"},{en:"I have four books.",zh:"我有四本書。"}],
+        letters:["f","o","u","r"] },
+      { id:"L1_NM_006", english:"five",  chinese:"五", emoji:"5️⃣", category:"number",
+        sentences:[{en:"Five fingers on hand!",zh:"手上有五根手指！"},{en:"I count to five!",zh:"我數到五！"}],
+        letters:["f","i","v","e"] },
+      { id:"L1_NM_007", english:"six",   chinese:"六", emoji:"6️⃣", category:"number",
+        sentences:[{en:"Six bees fly by!",zh:"六隻蜜蜂飛過去！"},{en:"Six eggs in nest!",zh:"巢裡有六顆蛋！"}],
+        letters:["s","i","x"] },
+      { id:"L1_NM_008", english:"seven", chinese:"七", emoji:"7️⃣", category:"number",
+        sentences:[{en:"Seven stars shine bright!",zh:"七顆星星閃閃亮！"},{en:"I see seven fish!",zh:"我看到七條魚！"}],
+        letters:["s","e","v","e","n"] },
+      { id:"L1_NM_009", english:"eight", chinese:"八", emoji:"8️⃣", category:"number",
+        sentences:[{en:"Eight legs on spider!",zh:"蜘蛛有八條腿！"},{en:"Eight birds on tree!",zh:"樹上有八隻鳥！"}],
+        letters:["e","i","g","h","t"] },
+      { id:"L1_NM_010", english:"nine",  chinese:"九", emoji:"9️⃣", category:"number",
+        sentences:[{en:"Nine cats on roof!",zh:"屋頂上有九隻貓！"},{en:"Nine red balloons float!",zh:"九顆紅氣球飄起來！"}],
+        letters:["n","i","n","e"] },
+      { id:"L1_NM_011", english:"ten",   chinese:"十", emoji:"🔟", category:"number",
+        sentences:[{en:"Ten toes wiggle now!",zh:"十根腳趾動起來！"},{en:"Count to ten now!",zh:"現在數到十！"}],
+        letters:["t","e","n"] },
+    ]
+  },
+  scene_L1_colors: {
+    id:"L1_CL", name:"顏色", nameEn:"Colors", emoji:"🎨",
+    words: [
+      { id:"L1_CL_001", english:"red",    chinese:"紅色",   emoji:"🔴", category:"color",
+        sentences:[{en:"Apples are bright red!",zh:"蘋果是鮮豔的紅色！"},{en:"Red roses look great!",zh:"紅玫瑰好美！"}],
+        letters:["r","e","d"] },
+      { id:"L1_CL_002", english:"blue",   chinese:"藍色",   emoji:"🔵", category:"color",
+        sentences:[{en:"The sky is blue!",zh:"天空是藍色的！"},{en:"I love blue skies!",zh:"我愛藍藍的天空！"}],
+        letters:["b","l","u","e"] },
+      { id:"L1_CL_003", english:"green",  chinese:"綠色",   emoji:"🟢", category:"color",
+        sentences:[{en:"Frogs are bright green!",zh:"青蛙是鮮綠色的！"},{en:"Green grass looks fresh!",zh:"綠草看起來好清新！"}],
+        letters:["g","r","e","e","n"] },
+      { id:"L1_CL_004", english:"yellow", chinese:"黃色",   emoji:"🟡", category:"color",
+        sentences:[{en:"Bananas are bright yellow!",zh:"香蕉是鮮黃色的！"},{en:"I see yellow sun!",zh:"我看到黃色太陽！"}],
+        letters:["y","e","l","l","o","w"] },
+      { id:"L1_CL_005", english:"orange", chinese:"橘色",   emoji:"🟠", category:"color",
+        sentences:[{en:"The sunset is orange!",zh:"夕陽是橘色的！"},{en:"I love orange color!",zh:"我愛橘色！"}],
+        letters:["o","r","a","n","g","e"] },
+      { id:"L1_CL_006", english:"pink",   chinese:"粉紅色", emoji:"🩷", category:"color",
+        sentences:[{en:"Pigs are cute pink!",zh:"豬豬是可愛的粉紅色！"},{en:"My shirt is pink!",zh:"我的衣服是粉紅色！"}],
+        letters:["p","i","n","k"] },
+      { id:"L1_CL_007", english:"purple", chinese:"紫色",   emoji:"🟣", category:"color",
+        sentences:[{en:"Grapes look deep purple!",zh:"葡萄是深紫色的！"},{en:"I love purple flowers!",zh:"我愛紫色的花！"}],
+        letters:["p","u","r","p","l","e"] },
+      { id:"L1_CL_008", english:"black",  chinese:"黑色",   emoji:"⚫", category:"color",
+        sentences:[{en:"Night sky is black!",zh:"夜空是黑色的！"},{en:"Black cats are cool!",zh:"黑貓好酷！"}],
+        letters:["b","l","a","c","k"] },
+      { id:"L1_CL_009", english:"white",  chinese:"白色",   emoji:"⚪", category:"color",
+        sentences:[{en:"Snow is pure white!",zh:"雪是純白色的！"},{en:"White clouds float high!",zh:"白雲高高飄！"}],
+        letters:["w","h","i","t","e"] },
+      { id:"L1_CL_010", english:"brown",  chinese:"棕色",   emoji:"🟤", category:"color",
+        sentences:[{en:"Bears are soft brown.",zh:"熊熊是柔軟的棕色。"},{en:"My dog is brown!",zh:"我的狗是棕色的！"}],
+        letters:["b","r","o","w","n"] },
+      { id:"L1_CL_011", english:"gray",   chinese:"灰色",   emoji:"🩶", category:"color",
+        sentences:[{en:"Elephants are big gray!",zh:"大象是大大的灰色！"},{en:"The sky looks gray.",zh:"天空看起來灰灰的。"}],
+        letters:["g","r","a","y"] },
+    ]
+  },
+  scene_L1_animals: {
+    id:"L1_AN", name:"動物", nameEn:"Animals", emoji:"🐾",
+    words: [
+      { id:"L1_AN_001", english:"dog",     chinese:"狗",   emoji:"🐶", category:"animal",
+        sentences:[{en:"My dog is cute!",zh:"我的狗好可愛！"},{en:"Dogs love to play!",zh:"狗狗愛玩耍！"}],
+        letters:["d","o","g"] },
+      { id:"L1_AN_002", english:"cat",     chinese:"貓",   emoji:"🐱", category:"animal",
+        sentences:[{en:"My cat sleeps well.",zh:"我的貓睡得很好。"},{en:"Cats purr when happy!",zh:"貓咪開心時咕嚕叫！"}],
+        letters:["c","a","t"] },
+      { id:"L1_AN_003", english:"fish",    chinese:"魚",   emoji:"🐟", category:"animal",
+        sentences:[{en:"Fish swim in water.",zh:"魚在水裡游泳。"},{en:"I see red fish!",zh:"我看到紅色的魚！"}],
+        letters:["f","i","s","h"] },
+      { id:"L1_AN_004", english:"bird",    chinese:"鳥",   emoji:"🐦", category:"animal",
+        sentences:[{en:"Birds sing each morning!",zh:"鳥兒每天早晨唱歌！"},{en:"A bird has wings.",zh:"鳥兒有翅膀。"}],
+        letters:["b","i","r","d"] },
+      { id:"L1_AN_005", english:"rabbit",  chinese:"兔子", emoji:"🐰", category:"animal",
+        sentences:[{en:"Rabbits eat soft carrots.",zh:"兔兔吃軟軟的胡蘿蔔。"},{en:"My rabbit is white!",zh:"我的兔子是白色的！"}],
+        letters:["r","a","b","b","i","t"] },
+      { id:"L1_AN_006", english:"frog",    chinese:"青蛙", emoji:"🐸", category:"animal",
+        sentences:[{en:"Frogs jump very high!",zh:"青蛙跳得好高！"},{en:"A frog sits here.",zh:"一隻青蛙坐在這裡。"}],
+        letters:["f","r","o","g"] },
+      { id:"L1_AN_007", english:"pig",     chinese:"豬",   emoji:"🐷", category:"animal",
+        sentences:[{en:"Pigs roll in mud!",zh:"豬豬在泥巴裡打滾！"},{en:"The pig is pink!",zh:"這隻豬是粉紅色的！"}],
+        letters:["p","i","g"] },
+      { id:"L1_AN_008", english:"chicken", chinese:"雞",   emoji:"🐔", category:"animal",
+        sentences:[{en:"Chickens lay warm eggs!",zh:"母雞生溫熱的蛋！"},{en:"A chicken says cluck!",zh:"雞會咕咕叫！"}],
+        letters:["c","h","i","c","k","e","n"] },
+      { id:"L1_AN_009", english:"cow",     chinese:"牛",   emoji:"🐄", category:"animal",
+        sentences:[{en:"Cows give us milk!",zh:"乳牛給我們牛奶！"},{en:"I see a cow.",zh:"我看到一頭牛。"}],
+        letters:["c","o","w"] },
+      { id:"L1_AN_010", english:"horse",   chinese:"馬",   emoji:"🐴", category:"animal",
+        sentences:[{en:"Horses run very fast!",zh:"馬跑得非常快！"},{en:"I ride the horse!",zh:"我騎馬！"}],
+        letters:["h","o","r","s","e"] },
+      { id:"L1_AN_011", english:"duck",    chinese:"鴨子", emoji:"🦆", category:"animal",
+        sentences:[{en:"Ducks swim in ponds.",zh:"鴨子在池塘游泳。"},{en:"A duck says quack!",zh:"鴨子嘎嘎叫！"}],
+        letters:["d","u","c","k"] },
+      { id:"L1_AN_012", english:"bee",     chinese:"蜜蜂", emoji:"🐝", category:"animal",
+        sentences:[{en:"Bees make sweet honey!",zh:"蜜蜂製造甜蜜的蜂蜜！"},{en:"A bee lands here.",zh:"一隻蜜蜂停在這裡。"}],
+        letters:["b","e","e"] },
+      { id:"L1_AN_013", english:"ant",     chinese:"螞蟻", emoji:"🐜", category:"animal",
+        sentences:[{en:"Ants carry heavy food!",zh:"螞蟻搬著重重的食物！"},{en:"Many ants march by!",zh:"好多螞蟻走過去！"}],
+        letters:["a","n","t"] },
+    ]
+  },
+  scene_L1_food: {
+    id:"L1_FD", name:"食物", nameEn:"Food", emoji:"🍎",
+    words: [
+      { id:"L1_FD_001", english:"apple",      chinese:"蘋果",   emoji:"🍎", category:"food",
+        sentences:[{en:"I eat red apples!",zh:"我吃紅蘋果！"},{en:"Apples are so sweet!",zh:"蘋果好甜！"}],
+        letters:["a","p","p","l","e"] },
+      { id:"L1_FD_002", english:"banana",     chinese:"香蕉",   emoji:"🍌", category:"food",
+        sentences:[{en:"Monkeys love yellow bananas!",zh:"猴子愛黃香蕉！"},{en:"Peel the banana now!",zh:"現在剝香蕉！"}],
+        letters:["b","a","n","a","n","a"] },
+      { id:"L1_FD_003", english:"orange",     chinese:"橘子",   emoji:"🍊", category:"food",
+        sentences:[{en:"Oranges taste very sweet!",zh:"橘子好甜！"},{en:"I peel my orange.",zh:"我剝我的橘子。"}],
+        letters:["o","r","a","n","g","e"] },
+      { id:"L1_FD_004", english:"grape",      chinese:"葡萄",   emoji:"🍇", category:"food",
+        sentences:[{en:"Grapes are sweet purple.",zh:"葡萄是甜甜的紫色。"},{en:"I pop one grape!",zh:"我把一顆葡萄塞進嘴！"}],
+        letters:["g","r","a","p","e"] },
+      { id:"L1_FD_005", english:"egg",        chinese:"雞蛋",   emoji:"🥚", category:"food",
+        sentences:[{en:"I crack one egg.",zh:"我敲開一顆蛋。"},{en:"Eggs are soft inside!",zh:"蛋裡面軟軟的！"}],
+        letters:["e","g","g"] },
+      { id:"L1_FD_006", english:"milk",       chinese:"牛奶",   emoji:"🥛", category:"food",
+        sentences:[{en:"Milk makes bones strong!",zh:"牛奶讓骨頭強壯！"},{en:"I drink cold milk.",zh:"我喝冰牛奶。"}],
+        letters:["m","i","l","k"] },
+      { id:"L1_FD_007", english:"water",      chinese:"水",     emoji:"💧", category:"food",
+        sentences:[{en:"Water is so fresh!",zh:"水好清涼！"},{en:"Drink more water please!",zh:"請多喝水！"}],
+        letters:["w","a","t","e","r"] },
+      { id:"L1_FD_008", english:"juice",      chinese:"果汁",   emoji:"🧃", category:"food",
+        sentences:[{en:"Orange juice tastes great!",zh:"柳橙汁好好喝！"},{en:"I sip cold juice.",zh:"我啜飲冰涼果汁。"}],
+        letters:["j","u","i","c","e"] },
+      { id:"L1_FD_009", english:"rice",       chinese:"飯",     emoji:"🍚", category:"food",
+        sentences:[{en:"I eat hot rice.",zh:"我吃熱騰騰的飯。"},{en:"Rice fills me up!",zh:"吃飯吃得好飽！"}],
+        letters:["r","i","c","e"] },
+      { id:"L1_FD_010", english:"bread",      chinese:"麵包",   emoji:"🍞", category:"food",
+        sentences:[{en:"I bite fresh bread.",zh:"我咬鬆軟的麵包。"},{en:"Bread smells so good!",zh:"麵包好香！"}],
+        letters:["b","r","e","a","d"] },
+      { id:"L1_FD_011", english:"cake",       chinese:"蛋糕",   emoji:"🎂", category:"food",
+        sentences:[{en:"My birthday cake glows!",zh:"我的生日蛋糕好閃亮！"},{en:"I love sweet cake!",zh:"我愛甜蛋糕！"}],
+        letters:["c","a","k","e"] },
+      { id:"L1_FD_012", english:"candy",      chinese:"糖果",   emoji:"🍬", category:"food",
+        sentences:[{en:"Candy is too sweet!",zh:"糖果太甜了！"},{en:"One candy for me!",zh:"一顆糖果給我！"}],
+        letters:["c","a","n","d","y"] },
+      { id:"L1_FD_013", english:"cookie",     chinese:"餅乾",   emoji:"🍪", category:"food",
+        sentences:[{en:"Cookies smell so yummy!",zh:"餅乾聞起來好香！"},{en:"I bake round cookies!",zh:"我烤圓圓的餅乾！"}],
+        letters:["c","o","o","k","i","e"] },
+      { id:"L1_FD_014", english:"ice cream",  chinese:"冰淇淋", emoji:"🍦", category:"food",
+        sentences:[{en:"Ice cream is cold!",zh:"冰淇淋好冰！"},{en:"I love ice cream!",zh:"我愛冰淇淋！"}],
+        letters:["i","c","e","c","r","e","a","m"] },
+      { id:"L1_FD_015", english:"watermelon", chinese:"西瓜",   emoji:"🍉", category:"food",
+        sentences:[{en:"Watermelon is cool sweet!",zh:"西瓜又涼又甜！"},{en:"Watermelon tastes so good!",zh:"西瓜好好吃！"}],
+        letters:["w","a","t","e","r","m","e","l","o","n"] },
+      { id:"L1_FD_016", english:"tomato",     chinese:"番茄",   emoji:"🍅", category:"food",
+        sentences:[{en:"A tomato is red!",zh:"番茄是紅色的！"},{en:"Tomato soup is warm!",zh:"番茄湯好溫暖！"}],
+        letters:["t","o","m","a","t","o"] },
+    ]
+  },
+  scene_L1_verbs_ext: {
+    id:"L1_VB", name:"動詞補充", nameEn:"More Actions", emoji:"✨",
+    words: [
+      { id:"L1_VB_001", english:"look",  chinese:"看",   emoji:"👀", category:"action",
+        sentences:[{en:"Look at the sky!",zh:"看看天空！"},{en:"Look, a bird flies!",zh:"看，一隻鳥飛過！"}],
+        letters:["l","o","o","k"] },
+      { id:"L1_VB_002", english:"sit",   chinese:"坐",   emoji:"🪑", category:"action",
+        sentences:[{en:"Sit down right here!",zh:"就在這裡坐下！"},{en:"The cat sits still.",zh:"貓咪靜靜坐著。"}],
+        letters:["s","i","t"] },
+      { id:"L1_VB_003", english:"stand", chinese:"站",   emoji:"🧍", category:"action",
+        sentences:[{en:"Stand up very tall!",zh:"站得高高的！"},{en:"I stand on rocks!",zh:"我站在石頭上！"}],
+        letters:["s","t","a","n","d"] },
+      { id:"L1_VB_004", english:"hold",  chinese:"抱/握", emoji:"🤲", category:"action",
+        sentences:[{en:"Hold my hand tight!",zh:"緊緊握住我的手！"},{en:"I hold my toy.",zh:"我抱著我的玩具。"}],
+        letters:["h","o","l","d"] },
+      { id:"L1_VB_005", english:"love",  chinese:"愛",   emoji:"❤️", category:"action",
+        sentences:[{en:"I love sunny days!",zh:"我愛晴天！"},{en:"Love makes hearts warm!",zh:"愛讓心溫暖！"}],
+        letters:["l","o","v","e"] },
+      { id:"L1_VB_006", english:"like",  chinese:"喜歡", emoji:"👍", category:"action",
+        sentences:[{en:"I like cute dogs!",zh:"我喜歡可愛的狗！"},{en:"I like sweet cake!",zh:"我喜歡甜蛋糕！"}],
+        letters:["l","i","k","e"] },
+      { id:"L1_VB_007", english:"want",  chinese:"想要", emoji:"🙋", category:"action",
+        sentences:[{en:"I want more cake!",zh:"我還想要蛋糕！"},{en:"I want to fly!",zh:"我想要飛翔！"}],
+        letters:["w","a","n","t"] },
+      { id:"L1_VB_008", english:"have",  chinese:"有",   emoji:"🎁", category:"action",
+        sentences:[{en:"I have two cats!",zh:"我有兩隻貓！"},{en:"We have great fun!",zh:"我們玩得很開心！"}],
+        letters:["h","a","v","e"] },
+    ]
+  },
+  scene_L1_adj: {
+    id:"L1_AJ", name:"形容詞", nameEn:"Adjectives", emoji:"⭐",
+    words: [
+      { id:"L1_AJ_001", english:"big",   chinese:"大",     emoji:"🐘", category:"adjective",
+        sentences:[{en:"The elephant is big!",zh:"大象好大！"},{en:"I want big cake!",zh:"我要大蛋糕！"}],
+        letters:["b","i","g"] },
+      { id:"L1_AJ_002", english:"small", chinese:"小",     emoji:"🐜", category:"adjective",
+        sentences:[{en:"A bee is small.",zh:"蜜蜂很小。"},{en:"Small ants work hard!",zh:"小螞蟻努力工作！"}],
+        letters:["s","m","a","l","l"] },
+      { id:"L1_AJ_003", english:"hot",   chinese:"熱",     emoji:"🔥", category:"adjective",
+        sentences:[{en:"The sun is hot!",zh:"太陽好熱！"},{en:"Hot soup smells great!",zh:"熱湯好香！"}],
+        letters:["h","o","t"] },
+      { id:"L1_AJ_004", english:"cold",  chinese:"冷",     emoji:"🧊", category:"adjective",
+        sentences:[{en:"Snow feels very cold!",zh:"雪摸起來很冷！"},{en:"Ice cream is cold!",zh:"冰淇淋好冰冷！"}],
+        letters:["c","o","l","d"] },
+      { id:"L1_AJ_005", english:"happy", chinese:"快樂",   emoji:"😄", category:"adjective",
+        sentences:[{en:"I feel very happy!",zh:"我感到很快樂！"},{en:"Happy dogs wag tails!",zh:"快樂的狗搖尾巴！"}],
+        letters:["h","a","p","p","y"] },
+      { id:"L1_AJ_006", english:"sad",   chinese:"難過",   emoji:"😢", category:"adjective",
+        sentences:[{en:"A sad face frowns.",zh:"難過的臉皺著眉。"},{en:"Don't feel so sad!",zh:"別那麼難過！"}],
+        letters:["s","a","d"] },
+      { id:"L1_AJ_007", english:"good",  chinese:"好",     emoji:"👍", category:"adjective",
+        sentences:[{en:"Good food tastes great!",zh:"好食物真好吃！"},{en:"You did good today!",zh:"你今天表現很好！"}],
+        letters:["g","o","o","d"] },
+      { id:"L1_AJ_008", english:"bad",   chinese:"壞",     emoji:"👎", category:"adjective",
+        sentences:[{en:"Bad days pass fast.",zh:"壞日子過得快。"},{en:"That smells really bad!",zh:"那個味道真的很臭！"}],
+        letters:["b","a","d"] },
+      { id:"L1_AJ_009", english:"cute",  chinese:"可愛",   emoji:"🥰", category:"adjective",
+        sentences:[{en:"The baby is cute!",zh:"寶寶好可愛！"},{en:"That kitten looks cute!",zh:"那隻小貓好可愛！"}],
+        letters:["c","u","t","e"] },
+      { id:"L1_AJ_010", english:"fast",  chinese:"快",     emoji:"⚡", category:"adjective",
+        sentences:[{en:"Cheetahs run very fast!",zh:"獵豹跑得超快！"},{en:"My legs feel fast!",zh:"我的腿感覺好快！"}],
+        letters:["f","a","s","t"] },
+      { id:"L1_AJ_011", english:"slow",  chinese:"慢",     emoji:"🐢", category:"adjective",
+        sentences:[{en:"A snail moves slow.",zh:"蝸牛移動很慢。"},{en:"Turtles walk very slow.",zh:"烏龜走路很慢。"}],
+        letters:["s","l","o","w"] },
+      { id:"L1_AJ_012", english:"tall",  chinese:"高",     emoji:"🦒", category:"adjective",
+        sentences:[{en:"Dad is very tall!",zh:"爸爸好高！"},{en:"A tall tree grows!",zh:"一棵高大的樹生長！"}],
+        letters:["t","a","l","l"] },
+      { id:"L1_AJ_013", english:"short", chinese:"矮/短", emoji:"🐾", category:"adjective",
+        sentences:[{en:"I am quite short.",zh:"我相當矮。"},{en:"Short hair feels cool!",zh:"短頭髮感覺很酷！"}],
+        letters:["s","h","o","r","t"] },
+      { id:"L1_AJ_014", english:"old",   chinese:"老/舊", emoji:"📜", category:"adjective",
+        sentences:[{en:"This book looks old.",zh:"這本書看起來很舊。"},{en:"My grandpa is old.",zh:"我爺爺年紀大了。"}],
+        letters:["o","l","d"] },
+      { id:"L1_AJ_015", english:"new",   chinese:"新",     emoji:"✨", category:"adjective",
+        sentences:[{en:"I got new shoes!",zh:"我得到新鞋子！"},{en:"My new shoes shine!",zh:"我的新鞋子亮晶晶！"}],
+        letters:["n","e","w"] },
+    ]
+  },
+  scene_L1_things: {
+    id:"L1_TH", name:"物品", nameEn:"Things", emoji:"🎒",
+    words: [
+      { id:"L1_TH_001", english:"book",   chinese:"書",   emoji:"📚", category:"thing",
+        sentences:[{en:"I read my book.",zh:"我讀我的書。"},{en:"Books open my mind!",zh:"書本開啟我的心智！"}],
+        letters:["b","o","o","k"] },
+      { id:"L1_TH_002", english:"bag",    chinese:"袋子", emoji:"🎒", category:"thing",
+        sentences:[{en:"My bag is heavy!",zh:"我的袋子好重！"},{en:"I pack my bag.",zh:"我整理我的袋子。"}],
+        letters:["b","a","g"] },
+      { id:"L1_TH_003", english:"ball",   chinese:"球",   emoji:"⚽", category:"thing",
+        sentences:[{en:"Kick the ball hard!",zh:"用力踢球！"},{en:"My ball bounces high!",zh:"我的球彈得好高！"}],
+        letters:["b","a","l","l"] },
+      { id:"L1_TH_004", english:"door",   chinese:"門",   emoji:"🚪", category:"thing",
+        sentences:[{en:"Open the door please!",zh:"請打開門！"},{en:"The door is red.",zh:"門是紅色的。"}],
+        letters:["d","o","o","r"] },
+      { id:"L1_TH_005", english:"chair",  chinese:"椅子", emoji:"🪑", category:"thing",
+        sentences:[{en:"Sit on the chair!",zh:"坐在椅子上！"},{en:"My chair is soft.",zh:"我的椅子很軟。"}],
+        letters:["c","h","a","i","r"] },
+      { id:"L1_TH_006", english:"table",  chinese:"桌子", emoji:"🪵", category:"thing",
+        sentences:[{en:"Food is on table!",zh:"食物在桌上！"},{en:"The table is clean!",zh:"桌子很乾淨！"}],
+        letters:["t","a","b","l","e"] },
+      { id:"L1_TH_007", english:"bed",    chinese:"床",   emoji:"🛏️", category:"thing",
+        sentences:[{en:"My bed is soft!",zh:"我的床好軟！"},{en:"I jump on bed!",zh:"我在床上跳！"}],
+        letters:["b","e","d"] },
+      { id:"L1_TH_008", english:"cup",    chinese:"杯子", emoji:"☕", category:"thing",
+        sentences:[{en:"My cup has milk.",zh:"我的杯子有牛奶。"},{en:"Fill my cup please!",zh:"請幫我裝滿杯子！"}],
+        letters:["c","u","p"] },
+      { id:"L1_TH_009", english:"pen",    chinese:"原子筆", emoji:"🖊️", category:"thing",
+        sentences:[{en:"I write with pen.",zh:"我用原子筆寫字。"},{en:"My pen is blue!",zh:"我的筆是藍色的！"}],
+        letters:["p","e","n"] },
+      { id:"L1_TH_010", english:"pencil", chinese:"鉛筆", emoji:"✏️", category:"thing",
+        sentences:[{en:"Draw with your pencil!",zh:"用你的鉛筆畫畫！"},{en:"I sharpen my pencil.",zh:"我削我的鉛筆。"}],
+        letters:["p","e","n","c","i","l"] },
+      { id:"L1_TH_011", english:"box",    chinese:"盒子", emoji:"📦", category:"thing",
+        sentences:[{en:"The box is full!",zh:"盒子裝滿了！"},{en:"I open the box.",zh:"我打開盒子。"}],
+        letters:["b","o","x"] },
+      { id:"L1_TH_012", english:"toy",    chinese:"玩具", emoji:"🧸", category:"thing",
+        sentences:[{en:"My toy is fun!",zh:"我的玩具好好玩！"},{en:"I love my toy!",zh:"我愛我的玩具！"}],
+        letters:["t","o","y"] },
+    ]
+  },
+  scene_L1_places: {
+    id:"L1_PL", name:"場所", nameEn:"Places", emoji:"🏠",
+    words: [
+      { id:"L1_PL_001", english:"home",   chinese:"家",    emoji:"🏠", category:"place",
+        sentences:[{en:"I love my home!",zh:"我愛我的家！"},{en:"Home is warm inside.",zh:"家裡好溫暖。"}],
+        letters:["h","o","m","e"] },
+      { id:"L1_PL_002", english:"school", chinese:"學校",  emoji:"🏫", category:"place",
+        sentences:[{en:"I learn at school.",zh:"我在學校學習。"},{en:"School starts every morning!",zh:"每天早上要上學！"}],
+        letters:["s","c","h","o","o","l"] },
+      { id:"L1_PL_003", english:"park",   chinese:"公園",  emoji:"🌳", category:"place",
+        sentences:[{en:"We run at park!",zh:"我們在公園跑步！"},{en:"The park is green.",zh:"公園綠油油的。"}],
+        letters:["p","a","r","k"] },
+      { id:"L1_PL_004", english:"room",   chinese:"房間",  emoji:"🛋️", category:"place",
+        sentences:[{en:"My room is clean!",zh:"我的房間很乾淨！"},{en:"I play in room.",zh:"我在房間玩。"}],
+        letters:["r","o","o","m"] },
+      { id:"L1_PL_005", english:"garden", chinese:"花園",  emoji:"🌸", category:"place",
+        sentences:[{en:"Flowers grow in garden!",zh:"花朵在花園裡生長！"},{en:"The garden smells sweet.",zh:"花園聞起來好香。"}],
+        letters:["g","a","r","d","e","n"] },
+      { id:"L1_PL_006", english:"zoo",    chinese:"動物園", emoji:"🦁", category:"place",
+        sentences:[{en:"The zoo has lions!",zh:"動物園有獅子！"},{en:"I love the zoo!",zh:"我愛動物園！"}],
+        letters:["z","o","o"] },
+    ]
+  },
+  scene_L1_nature: {
+    id:"L1_NT", name:"自然", nameEn:"Nature", emoji:"🌿",
+    words: [
+      { id:"L1_NT_001", english:"sun",    chinese:"太陽", emoji:"☀️",  category:"nature",
+        sentences:[{en:"The sun is warm!",zh:"太陽好溫暖！"},{en:"Sun shines every day!",zh:"太陽每天閃耀！"}],
+        letters:["s","u","n"] },
+      { id:"L1_NT_002", english:"cloud",  chinese:"雲",   emoji:"☁️",  category:"nature",
+        sentences:[{en:"Clouds float very high!",zh:"雲朵飄得好高！"},{en:"White clouds drift past!",zh:"白雲飄過去！"}],
+        letters:["c","l","o","u","d"] },
+      { id:"L1_NT_003", english:"rain",   chinese:"雨",   emoji:"🌧️", category:"nature",
+        sentences:[{en:"Rain falls from sky!",zh:"雨從天空落下！"},{en:"I love the rain!",zh:"我喜歡下雨！"}],
+        letters:["r","a","i","n"] },
+      { id:"L1_NT_004", english:"snow",   chinese:"雪",   emoji:"❄️",  category:"nature",
+        sentences:[{en:"Snow is cold white!",zh:"雪是冰涼的白色！"},{en:"I play in snow!",zh:"我在雪裡玩！"}],
+        letters:["s","n","o","w"] },
+      { id:"L1_NT_005", english:"wind",   chinese:"風",   emoji:"💨",  category:"nature",
+        sentences:[{en:"Wind blows my hair!",zh:"風吹亂我的頭髮！"},{en:"The wind feels nice!",zh:"風吹來好舒服！"}],
+        letters:["w","i","n","d"] },
+      { id:"L1_NT_006", english:"flower", chinese:"花",   emoji:"🌸",  category:"nature",
+        sentences:[{en:"The flower smells sweet!",zh:"花聞起來好甜！"},{en:"I pick one flower.",zh:"我摘了一朵花。"}],
+        letters:["f","l","o","w","e","r"] },
+      { id:"L1_NT_007", english:"tree",   chinese:"樹",   emoji:"🌳",  category:"nature",
+        sentences:[{en:"Trees grow very tall!",zh:"樹長得好高！"},{en:"I climb the tree!",zh:"我爬樹！"}],
+        letters:["t","r","e","e"] },
+      { id:"L1_NT_008", english:"grass",  chinese:"草",   emoji:"🌿",  category:"nature",
+        sentences:[{en:"Green grass feels soft!",zh:"綠草摸起來很柔軟！"},{en:"I roll on grass!",zh:"我在草地打滾！"}],
+        letters:["g","r","a","s","s"] },
+      { id:"L1_NT_009", english:"star",   chinese:"星星", emoji:"⭐",  category:"nature",
+        sentences:[{en:"Stars shine at night!",zh:"星星在夜晚閃耀！"},{en:"I count the stars!",zh:"我數星星！"}],
+        letters:["s","t","a","r"] },
+      { id:"L1_NT_010", english:"moon",   chinese:"月亮", emoji:"🌙",  category:"nature",
+        sentences:[{en:"The moon glows bright!",zh:"月亮閃閃發亮！"},{en:"I see the moon.",zh:"我看到月亮。"}],
+        letters:["m","o","o","n"] },
+      { id:"L1_NT_011", english:"sky",    chinese:"天空", emoji:"🌤️", category:"nature",
+        sentences:[{en:"The sky is blue!",zh:"天空是藍色的！"},{en:"Birds fly in sky!",zh:"鳥兒在天空飛！"}],
+        letters:["s","k","y"] },
+      { id:"L1_NT_012", english:"sea",    chinese:"海",   emoji:"🌊",  category:"nature",
+        sentences:[{en:"The sea looks blue!",zh:"海洋看起來好藍！"},{en:"Waves crash at sea!",zh:"海浪在海邊拍打！"}],
+        letters:["s","e","a"] },
+    ]
+  },
+  scene_L1_transport: {
+    id:"L1_TR", name:"交通", nameEn:"Transport", emoji:"🚗",
+    words: [
+      { id:"L1_TR_001", english:"car",   chinese:"汽車",   emoji:"🚗", category:"transport",
+        sentences:[{en:"The car goes fast!",zh:"汽車跑得很快！"},{en:"I ride in car.",zh:"我坐汽車。"}],
+        letters:["c","a","r"] },
+      { id:"L1_TR_002", english:"bus",   chinese:"公車",   emoji:"🚌", category:"transport",
+        sentences:[{en:"I take the bus.",zh:"我搭公車。"},{en:"The bus is full!",zh:"公車很擁擠！"}],
+        letters:["b","u","s"] },
+      { id:"L1_TR_003", english:"bike",  chinese:"腳踏車", emoji:"🚲", category:"transport",
+        sentences:[{en:"I ride my bike!",zh:"我騎腳踏車！"},{en:"Bikes are so fun!",zh:"騎腳踏車好好玩！"}],
+        letters:["b","i","k","e"] },
+      { id:"L1_TR_004", english:"train", chinese:"火車",   emoji:"🚂", category:"transport",
+        sentences:[{en:"The train goes fast!",zh:"火車跑得很快！"},{en:"I love train rides!",zh:"我愛坐火車！"}],
+        letters:["t","r","a","i","n"] },
+      { id:"L1_TR_005", english:"boat",  chinese:"船",     emoji:"⛵", category:"transport",
+        sentences:[{en:"The boat floats well!",zh:"船漂得很穩！"},{en:"We sail by boat!",zh:"我們坐船航行！"}],
+        letters:["b","o","a","t"] },
+    ]
+  },
+  scene_L1_extra: {
+    id:"L1_EX", name:"補充詞彙", nameEn:"Extra Words", emoji:"💡",
+    words: [
+      { id:"L1_EX_001", english:"dirty",  chinese:"髒",   emoji:"🤢", category:"adjective",
+        sentences:[{en:"My hands are dirty!",zh:"我的手好髒！"},{en:"Dirty clothes need wash!",zh:"髒衣服需要清洗！"}],
+        letters:["d","i","r","t","y"] },
+      { id:"L1_EX_002", english:"tired",  chinese:"累",   emoji:"😴", category:"adjective",
+        sentences:[{en:"I feel very tired.",zh:"我感到很累。"},{en:"Tired eyes need sleep!",zh:"疲累的眼睛需要睡覺！"}],
+        letters:["t","i","r","e","d"] },
+      { id:"L1_EX_003", english:"hungry", chinese:"餓",   emoji:"🍽️", category:"adjective",
+        sentences:[{en:"I feel very hungry!",zh:"我感到很餓！"},{en:"Hungry dogs eat fast!",zh:"餓了的狗吃得很快！"}],
+        letters:["h","u","n","g","r","y"] },
+      { id:"L1_EX_004", english:"sweet",  chinese:"甜",   emoji:"🍬", category:"adjective",
+        sentences:[{en:"Candy is very sweet!",zh:"糖果非常甜！"},{en:"Honey tastes so sweet!",zh:"蜂蜜好甜！"}],
+        letters:["s","w","e","e","t"] },
+      { id:"L1_EX_005", english:"soft",   chinese:"軟",   emoji:"🧸", category:"adjective",
+        sentences:[{en:"My cat is soft.",zh:"我的貓很軟。"},{en:"Soft pillows feel nice!",zh:"軟枕頭好舒服！"}],
+        letters:["s","o","f","t"] },
+      { id:"L1_EX_006", english:"hard",   chinese:"硬",   emoji:"🪨", category:"adjective",
+        sentences:[{en:"Rocks are very hard.",zh:"石頭非常硬。"},{en:"Hard work pays off!",zh:"努力付出有回報！"}],
+        letters:["h","a","r","d"] },
+      { id:"L1_EX_007", english:"wet",    chinese:"濕",   emoji:"💦", category:"adjective",
+        sentences:[{en:"My hair is wet!",zh:"我的頭髮濕了！"},{en:"Rain makes me wet!",zh:"雨讓我濕透！"}],
+        letters:["w","e","t"] },
+      { id:"L1_EX_008", english:"warm",   chinese:"溫暖", emoji:"🌡️", category:"adjective",
+        sentences:[{en:"Sun feels so warm!",zh:"太陽感覺好溫暖！"},{en:"Warm soup tastes good!",zh:"溫熱的湯好好喝！"}],
+        letters:["w","a","r","m"] },
+      { id:"L1_EX_009", english:"round",  chinese:"圓",   emoji:"⚽", category:"adjective",
+        sentences:[{en:"Balls are perfectly round!",zh:"球是完美的圓形！"},{en:"A round moon glows!",zh:"圓圓的月亮發光！"}],
+        letters:["r","o","u","n","d"] },
+      { id:"L1_EX_010", english:"loud",   chinese:"大聲", emoji:"📢", category:"adjective",
+        sentences:[{en:"Thunder sounds very loud!",zh:"雷聲非常大聲！"},{en:"Dogs bark very loud!",zh:"狗叫聲很大！"}],
+        letters:["l","o","u","d"] },
+      { id:"L1_EX_011", english:"quiet",  chinese:"安靜", emoji:"🤫", category:"adjective",
+        sentences:[{en:"Please be very quiet.",zh:"請保持安靜。"},{en:"A quiet room sleeps.",zh:"安靜的房間好眠。"}],
+        letters:["q","u","i","e","t"] },
+      { id:"L1_EX_012", english:"right",  chinese:"對/右", emoji:"✅", category:"adjective",
+        sentences:[{en:"Turn to the right!",zh:"往右轉！"},{en:"That answer is right!",zh:"那個答案是對的！"}],
+        letters:["r","i","g","h","t"] },
+      { id:"L1_EX_013", english:"wrong",  chinese:"錯",   emoji:"❌", category:"adjective",
+        sentences:[{en:"My answer was wrong.",zh:"我的答案是錯的。"},{en:"That looks quite wrong!",zh:"那看起來很不對！"}],
+        letters:["w","r","o","n","g"] },
+      { id:"L1_EX_014", english:"name",   chinese:"名字", emoji:"🏷️", category:"noun",
+        sentences:[{en:"My name is Chi!",zh:"我的名字叫Chi！"},{en:"What's your name today?",zh:"你今天叫什麼名字？"}],
+        letters:["n","a","m","e"] },
+    ]
   }
 };
 
@@ -842,8 +1335,20 @@ const ALL_WORDS = {};
 Object.values(SCENES).forEach(s => s.words.forEach(w => { ALL_WORDS[w.id] = w; }));
 const ALL_WORD_IDS = [
   ...SCENES.scene1.words.map(w => w.id),
-  ...SCENES.scene6.words.map(w => w.id)
-];
+  ...SCENES.scene6.words.map(w => w.id),
+  ...SCENES.scene_L1_body.words.map(w => w.id),
+  ...SCENES.scene_L1_numbers.words.map(w => w.id),
+  ...SCENES.scene_L1_colors.words.map(w => w.id),
+  ...SCENES.scene_L1_animals.words.map(w => w.id),
+  ...SCENES.scene_L1_food.words.map(w => w.id),
+  ...SCENES.scene_L1_verbs_ext.words.map(w => w.id),
+  ...SCENES.scene_L1_adj.words.map(w => w.id),
+  ...SCENES.scene_L1_things.words.map(w => w.id),
+  ...SCENES.scene_L1_places.words.map(w => w.id),
+  ...SCENES.scene_L1_nature.words.map(w => w.id),
+  ...SCENES.scene_L1_transport.words.map(w => w.id),
+  ...SCENES.scene_L1_extra.words.map(w => w.id),
+]; // 175 words total — Level 1
 const CHARACTER_EMOJIS = { penguin:"🐧", lion:"🦁", rabbit:"🐰", cat:"🐱" };
 
 // 26個英文字母正確美式發音對照（TTS 跨平台版）
@@ -878,6 +1383,29 @@ const LETTER_PHONETICS = {
 };
 
 // ===================================================
+// WORD DATABASE EXPORT
+// ===================================================
+function exportWordDatabase() {
+  const headers = ["等級","類別","英文","中文","Emoji","例句1(EN)","例句1(ZH)","例句2(EN)","例句2(ZH)"];
+  const rows = [];
+  Object.values(SCENES).forEach(scene => {
+    scene.words.forEach(w => {
+      rows.push([
+        'Level 1', scene.name, w.english, w.chinese, w.emoji,
+        w.sentences[0]?.en||'', w.sentences[0]?.zh||'',
+        w.sentences[1]?.en||'', w.sentences[1]?.zh||''
+      ]);
+    });
+  });
+  const csv = [headers,...rows].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = '英文單字庫_L1.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ===================================================
 // GAME STATE
 // ===================================================
 const gameState = {
@@ -904,6 +1432,16 @@ let learnState = {
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + id).classList.add('active');
+  const nav = document.getElementById('global-nav');
+  if (id === 'start' || id === 'map') {
+    nav.classList.add('hidden');
+  } else {
+    nav.classList.remove('hidden');
+  }
+}
+function goHome() {
+  resetGame();
+  initStart();
 }
 
 // ===================================================
@@ -929,23 +1467,43 @@ function initStart() {
   const players = [...(gameState.progress.players || [])].sort((a,b) => (b.lastPlayed||0)-(a.lastPlayed||0));
   if (players.length > 0) {
     html += `<div style="font-size:13px;color:#aaa;font-weight:700;margin:10px 0 6px">選擇冒險者繼續挑戰：</div>`;
-    players.slice(0,4).forEach(p => {
-      const ce = CHARACTER_EMOJIS[p.character] || '🐧';
-      const done = (p.learnedWordIds||[]).length;
-      const total = ALL_WORD_IDS.length;
+    players.slice(0, 4).forEach(p => {
+      const ce       = CHARACTER_EMOJIS[p.character] || '🐧';
+      const done     = (p.learnedWordIds||[]).length;
+      const total    = ALL_WORD_IDS.length;
       const sessions = p.sessionsCompleted || 0;
+      const unlocked = p.unlockedLevels || [1];
+      const maxLv    = Math.max(...unlocked);
+      const lvBadge  = maxLv >= 3 ? '🏆 Lv3' : maxLv >= 2 ? '⭐ Lv2 已解鎖' : '⚙️ Lv1';
+      const lastDate = p.lastPlayed
+        ? new Date(p.lastPlayed).toLocaleDateString('zh-TW', {month:'numeric', day:'numeric'})
+        : '';
       html += `<button class="saved-progress-btn" onclick="continuePlayer('${p.id}')"
         style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:6px;text-align:left">
         <span style="font-size:28px">${ce}</span>
-        <span style="flex:1">
-          <span style="font-weight:900">${p.name}</span>
-          <span style="font-size:13px;color:#888;margin-left:6px">已學 ${done}/${total} 字 ｜ ${sessions} 局</span>
+        <span style="flex:1;min-width:0">
+          <div style="font-weight:900;font-size:15px">${p.name}
+            <span style="font-size:12px;color:#FF6B35;margin-left:4px">${lvBadge}</span>
+          </div>
+          <div style="font-size:12px;color:#888">
+            已學 ${done}/${total} 字 ｜ ${sessions} 局完成${lastDate ? ' ｜ ' + lastDate : ''}
+          </div>
         </span>
-        <span style="font-size:13px;color:#FF6B35;font-weight:900;white-space:nowrap">▶ 繼續挑戰</span>
+        <span style="font-size:13px;color:#FF6B35;font-weight:900;white-space:nowrap">▶ 繼續</span>
       </button>`;
     });
   }
   area.innerHTML = html;
+}
+
+// 進入關卡選擇前，補救檢查解鎖狀態（修正舊存檔未觸發解鎖的情況）
+function _fixUnlockedLevels(profile) {
+  if (!profile) return;
+  if (!profile.unlockedLevels) profile.unlockedLevels = [1];
+  if ((profile.learnedWordIds||[]).length >= ALL_WORD_IDS.length && !profile.unlockedLevels.includes(2)) {
+    profile.unlockedLevels.push(2);
+    saveProgress();
+  }
 }
 
 function continuePlayer(profileId) {
@@ -955,6 +1513,7 @@ function continuePlayer(profileId) {
   gameState.player.name = profile.name;
   gameState.player.level = profile.level || 1;
   gameState.player.profileId = profileId;
+  _fixUnlockedLevels(profile);
   showScreen('level');
   const u = profile.unlockedLevels || [1];
   document.getElementById('level2-card').classList.toggle('locked', !u.includes(2));
@@ -992,6 +1551,7 @@ function confirmCharacter() {
   if (existing) {
     gameState.player.profileId = existing.id;
     gameState.player.level = existing.level || 1;
+    _fixUnlockedLevels(existing);
   } else {
     gameState.player.profileId = null;
   }
@@ -1420,6 +1980,8 @@ function renderQuizQuestion() {
   const total = learnState.quizWords.length;
   document.getElementById('quiz-title').textContent = `小測驗 🧠　${learnState.quizIndex + 1} / ${total}`;
   document.getElementById('quiz-emoji').textContent = word.emoji;
+  const zhEl = document.getElementById('quiz-chinese');
+  if (zhEl) zhEl.textContent = word.chinese;
   document.getElementById('quiz-feedback').style.display = 'none';
 
   const wrong = shuffleArray(Object.values(ALL_WORDS).filter(w => w.id !== word.id)).slice(0, 3);
@@ -1945,8 +2507,10 @@ function triggerLucky() {
     });
     let extra = '';
     if (prize.id === 'forward') {
-      gameState.session.currentPosition = Math.min(40, gameState.session.currentPosition + 2);
-      updateHUD(); renderMap();
+      document.getElementById('lucky-result').innerHTML =
+        `<div class="event-result-banner good">${prize.icon} ${prize.text}<br><small style="font-weight:700">${prize.desc}</small></div>
+         <button class="btn btn-primary" style="margin-top:12px" onclick="walkSteps(2)">出發！🍀</button>`;
+      return;
     } else if (prize.id === 'hammer') {
       gameState.session.hammerCount++;
       updateHUD(); spawnStars(); playSound('hammer');
@@ -2257,15 +2821,64 @@ function challengeFeedWatermelon() {
 
 // ── 🌈 傳送格 ────────────────────────────────────────────
 let _teleportDelta = 0;
-function doTeleport() {
+
+// 步進移動：彩虹格/幸運格前進後退時逐格觸發事件（後退不重新觸發學習格）
+function walkSteps(delta) {
   hideEventOverlay();
-  const newPos = Math.max(0, Math.min(40, gameState.session.currentPosition + _teleportDelta));
-  gameState.session.currentPosition = newPos;
-  updateHUD(); renderMap();
-  setTimeout(() => {
-    const el = document.querySelector('.map-cell.current-pos') || document.getElementById('cell-0');
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, 200);
+  const isRetreat = delta < 0;
+  const steps = Math.abs(delta);
+  let step = 0;
+  diceRolling = true;
+  const diceBtn = document.getElementById('dice-btn');
+  if (diceBtn) diceBtn.disabled = true;
+
+  function doStep() {
+    step++;
+    const dir = isRetreat ? -1 : 1;
+    const curPos = gameState.session.currentPosition;
+    const newPos = Math.max(0, Math.min(40, curPos + dir));
+    if (newPos === curPos) {
+      if (diceBtn) diceBtn.disabled = false;
+      diceRolling = false;
+      return;
+    }
+    gameState.session.currentPosition = newPos;
+    updateHUD(); renderMap();
+    playSound('step');
+    const el = document.getElementById(`cell-${newPos}`);
+    if (el) {
+      el.classList.remove('cell-step-flash');
+      void el.offsetWidth;
+      el.classList.add('cell-step-flash');
+      setTimeout(() => el.classList.remove('cell-step-flash'), 230);
+    }
+    const isLearningPos = newPos === 10 || newPos === 20 || newPos === 30;
+    if (step < steps) {
+      // 中間格：前進遇學習格停下觸發；後退跳過學習格繼續走；其他格繼續走
+      if (!isRetreat && isLearningPos) {
+        setTimeout(() => triggerCellEvent(newPos), 500);
+      } else {
+        setTimeout(doStep, 270);
+      }
+    } else {
+      // 最後一格：後退遇學習格不重新學習；其他正常觸發
+      if (isRetreat && isLearningPos) {
+        const resEl = document.getElementById('dice-result-text');
+        const hintEl = document.getElementById('dice-hint');
+        if (resEl) resEl.textContent = '🌀 後退！';
+        if (hintEl) hintEl.textContent = '再擲一次吧！';
+        if (diceBtn) diceBtn.disabled = false;
+        diceRolling = false;
+      } else {
+        setTimeout(() => triggerCellEvent(newPos), 500);
+      }
+    }
+  }
+  doStep();
+}
+
+function doTeleport() {
+  walkSteps(_teleportDelta);
 }
 function triggerTeleport() {
   const forward = Math.random() < 0.5;
@@ -3008,11 +3621,21 @@ function bossBattleEnd(playerWon) {
         });
         profile.sessionsCompleted = (profile.sessionsCompleted || 0) + 1;
         profile.lastPlayed = Date.now();
-        // Unlock Level 2 when all Level 1 words learned
+        // 學完全部 Level 1 單字後解鎖 Level 2
+        if (!profile.unlockedLevels) profile.unlockedLevels = [1];
         if (profile.learnedWordIds.length >= ALL_WORD_IDS.length) {
-          if (!profile.unlockedLevels) profile.unlockedLevels = [1];
           if (!profile.unlockedLevels.includes(2)) profile.unlockedLevels.push(2);
         }
+        if (profile.learnedWordIds.length >= ALL_WORD_IDS.length * 2) {
+          if (!profile.unlockedLevels.includes(3)) profile.unlockedLevels.push(3);
+        }
+        // 記錄每局紀錄
+        if (!profile.sessionHistory) profile.sessionHistory = [];
+        profile.sessionHistory.push({
+          level: wonLv, date: Date.now(),
+          learned: profile.learnedWordIds.length,
+          hammers: gameState.session.hammerCount || 0
+        });
       }
       const nextLv = gameState.player.level + 1;
       if (nextLv <= 3 && !gameState.progress.unlockedLevels.includes(nextLv))
@@ -3232,41 +3855,142 @@ function spawnStars() {
 // ===================================================
 // 自訂單字庫
 // ===================================================
+// 依詞性 × 等級設計句型模板
 const SENTENCE_TEMPLATES = {
-  1: [
-    (w,c) => ({ en:`I see a ${w}.`,   zh:`我看到${c}。` }),
-    (w,c) => ({ en:`I like ${w}!`,    zh:`我喜歡${c}！` }),
-    (w,c) => ({ en:`This is a ${w}.`, zh:`這是${c}。` }),
-    (w,c) => ({ en:`Look, a ${w}!`,   zh:`看，是${c}！` }),
-    (w,c) => ({ en:`I have a ${w}.`,  zh:`我有${c}。` }),
-    (w,c) => ({ en:`I love ${w}!`,    zh:`我愛${c}！` }),
-    (w,c) => ({ en:`I want ${w}!`,    zh:`我想要${c}！` }),
-    (w,c) => ({ en:`My ${w}!`,        zh:`我的${c}！` }),
-  ],
-  2: [
-    (w,c) => ({ en:`The ${w} is so cute!`,      zh:`這個${c}好可愛！` }),
-    (w,c) => ({ en:`Do you see the ${w}?`,       zh:`你看到${c}了嗎？` }),
-    (w,c) => ({ en:`Can I have the ${w}?`,       zh:`我可以要${c}嗎？` }),
-    (w,c) => ({ en:`I really love ${w}!`,        zh:`我真的很愛${c}！` }),
-    (w,c) => ({ en:`Please give me the ${w}!`,   zh:`請給我${c}！` }),
-    (w,c) => ({ en:`The ${w} is very nice!`,     zh:`這個${c}很棒！` }),
-    (w,c) => ({ en:`I want to see the ${w}!`,    zh:`我想看${c}！` }),
-    (w,c) => ({ en:`I think ${w} is very fun!`,  zh:`我覺得${c}很好玩！` }),
-  ],
-  3: [
-    (w,c) => ({ en:`I am so happy to see the ${w}!`,         zh:`我好開心能看到${c}！` }),
-    (w,c) => ({ en:`There is a beautiful ${w} over there!`,  zh:`那裡有一個美麗的${c}！` }),
-    (w,c) => ({ en:`I have been looking for a ${w} today!`,  zh:`我今天一直在找${c}！` }),
-    (w,c) => ({ en:`My favorite thing to see is the ${w}!`,  zh:`我最喜歡看的就是${c}！` }),
-    (w,c) => ({ en:`Can you help me find the ${w} please?`,  zh:`你可以幫我找${c}嗎？` }),
-    (w,c) => ({ en:`I think a ${w} is the best thing ever!`, zh:`我覺得${c}是最棒的！` }),
-    (w,c) => ({ en:`Every day I dream of playing with ${w}!`,zh:`每天我都夢想和${c}玩！` }),
-    (w,c) => ({ en:`I want to have my very own ${w} someday!`,zh:`我有一天想擁有自己的${c}！` }),
-  ],
+  noun: {
+    1: [
+      (w,c) => ({ en:`I see a ${w}.`,   zh:`我看到${c}。` }),
+      (w,c) => ({ en:`I like ${w}!`,    zh:`我喜歡${c}！` }),
+      (w,c) => ({ en:`This is a ${w}.`, zh:`這是${c}。` }),
+      (w,c) => ({ en:`Look, a ${w}!`,   zh:`看，是${c}！` }),
+      (w,c) => ({ en:`I have a ${w}.`,  zh:`我有${c}。` }),
+      (w,c) => ({ en:`I love ${w}!`,    zh:`我愛${c}！` }),
+      (w,c) => ({ en:`I want a ${w}!`,  zh:`我想要${c}！` }),
+      (w,c) => ({ en:`My ${w}!`,        zh:`我的${c}！` }),
+    ],
+    2: [
+      (w,c) => ({ en:`The ${w} is so cute!`,     zh:`這個${c}好可愛！` }),
+      (w,c) => ({ en:`Do you see the ${w}?`,      zh:`你看到${c}了嗎？` }),
+      (w,c) => ({ en:`Can I have a ${w}?`,        zh:`我可以要${c}嗎？` }),
+      (w,c) => ({ en:`I really love ${w}!`,       zh:`我真的很愛${c}！` }),
+      (w,c) => ({ en:`Please give me the ${w}!`,  zh:`請給我${c}！` }),
+      (w,c) => ({ en:`The ${w} is very nice!`,    zh:`這個${c}很棒！` }),
+      (w,c) => ({ en:`I want to see the ${w}!`,   zh:`我想看${c}！` }),
+      (w,c) => ({ en:`I think ${w} is very fun!`, zh:`我覺得${c}很好玩！` }),
+    ],
+    3: [
+      (w,c) => ({ en:`I am so happy to see a ${w}!`,         zh:`我好開心能看到${c}！` }),
+      (w,c) => ({ en:`There is a beautiful ${w} over there!`,zh:`那裡有一個美麗的${c}！` }),
+      (w,c) => ({ en:`I have been looking for a ${w} today!`,zh:`我今天一直在找${c}！` }),
+      (w,c) => ({ en:`My favorite thing is to see a ${w}!`,  zh:`我最喜歡看的就是${c}！` }),
+      (w,c) => ({ en:`Can you help me find the ${w} please?`,zh:`你可以幫我找${c}嗎？` }),
+      (w,c) => ({ en:`I think a ${w} is the best thing ever!`,zh:`我覺得${c}是最棒的！` }),
+      (w,c) => ({ en:`Every day I dream about having a ${w}!`,zh:`每天我都夢想擁有${c}！` }),
+      (w,c) => ({ en:`I want to have my very own ${w} someday!`,zh:`我有一天想擁有自己的${c}！` }),
+    ],
+  },
+  verb: {
+    1: [
+      (w,c) => ({ en:`I can ${w}!`,       zh:`我會${c}！` }),
+      (w,c) => ({ en:`I like to ${w}.`,   zh:`我喜歡${c}。` }),
+      (w,c) => ({ en:`Let's ${w}!`,       zh:`我們來${c}吧！` }),
+      (w,c) => ({ en:`I want to ${w}.`,   zh:`我想要${c}。` }),
+      (w,c) => ({ en:`I love to ${w}!`,   zh:`我很愛${c}！` }),
+      (w,c) => ({ en:`I will ${w}!`,      zh:`我要${c}！` }),
+      (w,c) => ({ en:`Let me ${w}!`,      zh:`讓我${c}！` }),
+      (w,c) => ({ en:`I can ${w} now!`,   zh:`我現在會${c}了！` }),
+    ],
+    2: [
+      (w,c) => ({ en:`Can you ${w} with me?`,       zh:`你可以和我一起${c}嗎？` }),
+      (w,c) => ({ en:`I like to ${w} every day.`,   zh:`我每天都喜歡${c}。` }),
+      (w,c) => ({ en:`Let's ${w} together!`,        zh:`我們一起${c}吧！` }),
+      (w,c) => ({ en:`I am learning how to ${w}.`,  zh:`我正在學習如何${c}。` }),
+      (w,c) => ({ en:`I am really good at ${w}!`,   zh:`我很擅長${c}！` }),
+      (w,c) => ({ en:`It is so fun to ${w}!`,       zh:`${c}真的很好玩！` }),
+      (w,c) => ({ en:`I try to ${w} every morning.`,zh:`我每天早上都會${c}。` }),
+      (w,c) => ({ en:`I want to ${w} with you!`,    zh:`我想和你一起${c}！` }),
+    ],
+    3: [
+      (w,c) => ({ en:`I practice how to ${w} every single day!`,   zh:`我每天都在練習${c}！` }),
+      (w,c) => ({ en:`My teacher always says I should ${w} more.`,  zh:`老師說我應該多${c}。` }),
+      (w,c) => ({ en:`I have been learning how to ${w} all week!`,  zh:`我這整個星期都在學${c}！` }),
+      (w,c) => ({ en:`It makes me happy when I get to ${w}!`,       zh:`每當我能${c}就覺得很開心！` }),
+      (w,c) => ({ en:`I want to ${w} as much as I can every day!`,  zh:`我每天都想盡可能地${c}！` }),
+      (w,c) => ({ en:`The best part of my day is when I can ${w}!`, zh:`我一天中最棒的部分就是能${c}！` }),
+      (w,c) => ({ en:`I always feel great after I ${w}.`,           zh:`每次${c}之後我都覺得很棒。` }),
+      (w,c) => ({ en:`Can you teach me how to ${w} really well?`,   zh:`你可以教我怎麼好好${c}嗎？` }),
+    ],
+  },
+  adj: {
+    1: [
+      (w,c) => ({ en:`I feel ${w}.`,   zh:`我覺得${c}。` }),
+      (w,c) => ({ en:`You are ${w}!`,  zh:`你很${c}！` }),
+      (w,c) => ({ en:`It is ${w}!`,    zh:`這很${c}！` }),
+      (w,c) => ({ en:`So ${w}!`,       zh:`好${c}喔！` }),
+      (w,c) => ({ en:`How ${w}!`,      zh:`真${c}啊！` }),
+      (w,c) => ({ en:`That is ${w}.`,  zh:`那個很${c}。` }),
+      (w,c) => ({ en:`I am ${w}!`,     zh:`我好${c}！` }),
+      (w,c) => ({ en:`So very ${w}!`,  zh:`超級${c}！` }),
+    ],
+    2: [
+      (w,c) => ({ en:`I feel so ${w} today!`,       zh:`我今天好${c}喔！` }),
+      (w,c) => ({ en:`Why are you so ${w}?`,         zh:`你為什麼這麼${c}？` }),
+      (w,c) => ({ en:`Everything looks ${w} now!`,  zh:`現在一切看起來都很${c}！` }),
+      (w,c) => ({ en:`You look very ${w} today!`,   zh:`你今天看起來很${c}！` }),
+      (w,c) => ({ en:`It makes me feel ${w}!`,      zh:`這讓我感到${c}！` }),
+      (w,c) => ({ en:`The sky looks so ${w}!`,      zh:`天空看起來好${c}！` }),
+      (w,c) => ({ en:`I think that is very ${w}!`,  zh:`我覺得那很${c}！` }),
+      (w,c) => ({ en:`Are you feeling ${w} today?`, zh:`你今天感覺${c}嗎？` }),
+    ],
+    3: [
+      (w,c) => ({ en:`I have never felt this ${w} before!`,          zh:`我從來沒有感覺這麼${c}過！` }),
+      (w,c) => ({ en:`Everything seems so ${w} when I am with you!`, zh:`和你在一起的時候一切都好${c}！` }),
+      (w,c) => ({ en:`It makes me so ${w} when things go well!`,     zh:`事情順利的時候我真的好${c}！` }),
+      (w,c) => ({ en:`Why does everything feel so ${w} today?`,      zh:`為什麼今天一切感覺都這麼${c}？` }),
+      (w,c) => ({ en:`I want to feel ${w} every single day!`,        zh:`我希望每天都能感覺${c}！` }),
+      (w,c) => ({ en:`It is hard to stay ${w} when things go wrong.`,zh:`事情不順時要保持${c}真的很難。` }),
+      (w,c) => ({ en:`I am so ${w} that I do not know what to say!`, zh:`我好${c}，不知道要說什麼！` }),
+      (w,c) => ({ en:`You always make me feel ${w} when I see you!`, zh:`每次看到你都讓我感覺好${c}！` }),
+    ],
+  },
+  other: {
+    1: [
+      (w,c) => ({ en:`I like ${w}!`,    zh:`我喜歡${c}！` }),
+      (w,c) => ({ en:`I love ${w}!`,    zh:`我愛${c}！` }),
+      (w,c) => ({ en:`This is ${w}.`,   zh:`這是${c}。` }),
+      (w,c) => ({ en:`${w} is great!`,  zh:`${c}很棒！` }),
+      (w,c) => ({ en:`I know ${w}!`,    zh:`我知道${c}！` }),
+      (w,c) => ({ en:`I say ${w}!`,     zh:`我說${c}！` }),
+      (w,c) => ({ en:`Oh, ${w}!`,       zh:`哦，${c}！` }),
+      (w,c) => ({ en:`Wow, ${w}!`,      zh:`哇，${c}！` }),
+    ],
+    2: [
+      (w,c) => ({ en:`I really enjoy ${w}!`,        zh:`我真的很喜歡${c}！` }),
+      (w,c) => ({ en:`I think ${w} is great!`,      zh:`我覺得${c}很棒！` }),
+      (w,c) => ({ en:`I always think about ${w}.`,  zh:`我總是想到${c}。` }),
+      (w,c) => ({ en:`I am learning about ${w}!`,   zh:`我正在學習${c}！` }),
+      (w,c) => ({ en:`Tell me more about ${w}!`,    zh:`多告訴我一些${c}！` }),
+      (w,c) => ({ en:`I want to know more about ${w}!`,zh:`我想更了解${c}！` }),
+      (w,c) => ({ en:`${w} is so interesting!`,     zh:`${c}好有趣！` }),
+      (w,c) => ({ en:`Do you know about ${w}?`,     zh:`你知道${c}嗎？` }),
+    ],
+    3: [
+      (w,c) => ({ en:`I have always been interested in ${w}.`,     zh:`我一直對${c}很感興趣。` }),
+      (w,c) => ({ en:`I believe that ${w} is very important.`,     zh:`我相信${c}非常重要。` }),
+      (w,c) => ({ en:`I want to know so much more about ${w}!`,    zh:`我想多了解${c}！` }),
+      (w,c) => ({ en:`Nothing can describe how amazing ${w} is!`,  zh:`沒有什麼能描述${c}有多棒！` }),
+      (w,c) => ({ en:`I have been thinking about ${w} all day.`,   zh:`我整天都在想${c}。` }),
+      (w,c) => ({ en:`Everyone should learn more about ${w}!`,     zh:`每個人都應該多了解${c}！` }),
+      (w,c) => ({ en:`I think ${w} is one of the best things ever!`,zh:`我覺得${c}是最棒的事情之一！` }),
+      (w,c) => ({ en:`It is hard to imagine life without ${w}!`,   zh:`很難想像沒有${c}的生活！` }),
+    ],
+  },
 };
 
-function generateSentences(english, chinese, level) {
-  const templates = SENTENCE_TEMPLATES[level] || SENTENCE_TEMPLATES[1];
+function generateSentences(english, chinese, level, wordType) {
+  const type = wordType || 'noun';
+  const templates = (SENTENCE_TEMPLATES[type] || SENTENCE_TEMPLATES.noun)[level]
+    || SENTENCE_TEMPLATES.noun[1];
   const pool = shuffleArray([...templates]);
   return [pool[0](english, chinese), pool[1](english, chinese)];
 }
@@ -3286,16 +4010,17 @@ function registerCustomWords() {
   Object.values(cw).flat().forEach(w => { if (w && w.id) ALL_WORDS[w.id] = w; });
 }
 
-function addCustomWord(english, chinese, emoji, level) {
-  english = english.trim().toLowerCase();
-  chinese = chinese.trim();
-  emoji   = (emoji||'').trim() || '📝';
+function addCustomWord(english, chinese, emoji, level, wordType) {
+  english  = english.trim().toLowerCase();
+  chinese  = chinese.trim();
+  emoji    = (emoji||'').trim() || '📝';
+  wordType = wordType || 'noun';
   if (!english || !chinese) return false;
   const cw   = loadCustomWords();
   const key  = 'level' + level;
   const id   = 'CUSTOM_L' + level + '_' + Date.now();
-  const sents = generateSentences(english, chinese, level);
-  const word  = { id, english, chinese, emoji,
+  const sents = generateSentences(english, chinese, level, wordType);
+  const word  = { id, english, chinese, emoji, wordType,
     category:'custom', letters: english.split(''),
     sentences: sents };
   cw[key].push(word);
@@ -3397,33 +4122,60 @@ function showParentDashboard() {
     playersHtml = '<div style="color:#aaa;font-size:15px;text-align:center;padding:16px">還沒有冒險者資料</div>';
   } else {
     playersHtml = players.map(p => {
-      const ce = CHARACTER_EMOJIS[p.character] || '🐧';
-      const done  = (p.learnedWordIds||[]).length;
-      const wrong = (p.wrongWordIds||[]).length;
-      const sess  = p.sessionsCompleted || 0;
-      const pct   = Math.round(done/totalWords*100);
+      const ce       = CHARACTER_EMOJIS[p.character] || '🐧';
+      const done     = (p.learnedWordIds||[]).length;
+      const wrong    = (p.wrongWordIds||[]).length;
+      const sess     = p.sessionsCompleted || 0;
+      const pct      = Math.round(done / totalWords * 100);
+      const unlocked = p.unlockedLevels || [1];
+      const maxLv    = Math.max(...unlocked);
+      const lastDate = p.lastPlayed
+        ? new Date(p.lastPlayed).toLocaleDateString('zh-TW', {year:'numeric',month:'numeric',day:'numeric'})
+        : '未記錄';
+      const history  = (p.sessionHistory || []).slice(-5).reverse();
+      const histHtml = history.length > 0
+        ? history.map(h => {
+            const d = new Date(h.date).toLocaleDateString('zh-TW', {month:'numeric',day:'numeric'});
+            return `<span style="background:white;border-radius:8px;padding:2px 8px;font-size:12px;
+              margin:2px;display:inline-block;border:1px solid #ddd">
+              Lv${h.level} 過關 · ${d} · 🔨×${h.hammers}
+            </span>`;
+          }).join('')
+        : '<span style="font-size:12px;color:#aaa">尚無完成紀錄</span>';
       const wrongTags = (p.wrongWordIds||[]).map(id => ALL_WORDS[id]
         ? `<span style="background:#FFF9C4;border-radius:8px;padding:1px 7px;font-size:13px;
                         margin:2px;display:inline-block">${ALL_WORDS[id].english}</span>` : '').join('');
       return `<div style="background:#F8F9FA;border-radius:16px;padding:12px;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
           <span style="font-size:32px">${ce}</span>
-          <div>
-            <div style="font-size:18px;font-weight:900">${p.name}</div>
-            <div style="font-size:13px;color:#888">${sess} 局完成 ｜ 已學 ${done}/${totalWords} 字（${pct}%）</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:17px;font-weight:900">${p.name}
+              <span style="font-size:12px;color:#FF6B35;margin-left:6px">
+                ${ maxLv>=3 ? '🏆 全關解鎖' : maxLv>=2 ? '⭐ Lv2 解鎖' : '⚙️ Lv1' }
+              </span>
+            </div>
+            <div style="font-size:12px;color:#888">${sess} 局完成 ｜ 已學 ${done}/${totalWords} 字（${pct}%） ｜ 最近：${lastDate}</div>
           </div>
+          <button onclick="deletePlayer('${p.id}')"
+            style="background:#FFEBEE;border:1.5px solid #EF9A9A;color:#c62828;border-radius:10px;
+                   padding:5px 10px;font-size:13px;font-weight:900;font-family:inherit;
+                   cursor:pointer;flex-shrink:0">🗑️ 刪除</button>
         </div>
         <div style="background:#e8f5e9;border-radius:8px;height:8px;margin-bottom:8px">
           <div style="background:#4CAF50;height:100%;border-radius:8px;width:${pct}%;transition:width 0.5s"></div>
         </div>
-        ${wrong > 0 ? `<div style="font-size:13px;color:#888;font-weight:700;margin-bottom:4px">需加強（${wrong} 字）：</div>
-        <div style="line-height:2">${wrongTags}</div>` : '<div style="font-size:13px;color:#2E7D32">✅ 沒有錯誤單字！太棒了！</div>'}
+        <div style="font-size:12px;color:#888;font-weight:700;margin-bottom:4px">📋 近期紀錄：</div>
+        <div style="line-height:2;margin-bottom:6px">${histHtml}</div>
+        ${wrong > 0
+          ? `<div style="font-size:12px;color:#888;font-weight:700;margin-bottom:4px">需加強（${wrong} 字）：</div>
+             <div style="line-height:2">${wrongTags}</div>`
+          : '<div style="font-size:12px;color:#2E7D32">✅ 沒有錯誤單字！太棒了！</div>'}
       </div>`;
     }).join('');
   }
 
   const dashHtml = `
-    <div style="font-size:16px;font-weight:900;color:#333;margin-bottom:12px">🎮 冒險者學習進度</div>
+    <div style="font-size:16px;font-weight:900;color:#333;margin-bottom:12px">⚙️ 冒險者學習進度</div>
     <div style="max-height:45vh;overflow-y:auto">${playersHtml}</div>
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
       <button class="btn btn-secondary" id="pm-sound-btn" onclick="toggleSound()" style="width:100%">
@@ -3432,6 +4184,8 @@ function showParentDashboard() {
       <button class="btn" style="background:#4CAF50;color:white;width:100%;font-size:16px;padding:12px"
         onclick="testTTSNow()">🔊 測試英文發音</button>
       <div id="tts-test-result" style="font-size:13px;text-align:center;color:#666;min-height:18px"></div>
+      <button class="btn" style="background:#1565C0;color:white;width:100%;font-size:16px;padding:12px"
+        onclick="exportWordDatabase()">📊 匯出單字庫 (CSV)</button>
       <button class="btn" style="background:#FF5722;color:white;width:100%;font-size:18px;padding:14px"
         onclick="confirmClearProgress()">🗑️ 清除所有進度</button>
     </div>`;
@@ -3448,7 +4202,7 @@ function showParentDashboard() {
       <button onclick="showParentDashboard()"
         style="flex:1;padding:9px 4px;border:2px solid #FF6B35;border-radius:12px;background:#FFF3EE;
                color:#FF6B35;font-size:13px;font-weight:900;font-family:inherit;cursor:pointer">
-        🎮 學習進度
+        ⚙️ 學習進度
       </button>
       <button onclick="showCustomWordBank(1)"
         style="flex:1;padding:9px 4px;border:2px solid #4CAF50;border-radius:12px;background:#E8F5E9;
@@ -3505,13 +4259,27 @@ function showCustomWordBank(level) {
       <div style="display:flex;gap:8px;margin-bottom:6px">
         <input id="cw-emoji" value="📝" maxlength="2"
           style="width:46px;text-align:center;font-size:20px;padding:6px;border:2px solid #ddd;
-                 border-radius:10px;font-family:inherit;outline:none"/>
+                 border-radius:10px;font-family:inherit;outline:none;flex-shrink:0"/>
         <input id="cw-en" placeholder="英文單字" maxlength="20"
-          style="flex:1;font-size:16px;padding:8px 10px;border:2px solid #ddd;
+          style="flex:1;min-width:0;font-size:16px;padding:8px 10px;border:2px solid #ddd;
                  border-radius:10px;font-family:inherit;outline:none"/>
-        <input id="cw-zh" placeholder="中文" maxlength="10"
-          style="width:80px;font-size:16px;padding:8px 10px;border:2px solid #ddd;
-                 border-radius:10px;font-family:inherit;outline:none"/>
+      </div>
+      <div style="margin-bottom:6px">
+        <input id="cw-zh" placeholder="中文翻譯" maxlength="10"
+          style="width:100%;font-size:16px;padding:8px 10px;border:2px solid #ddd;
+                 border-radius:10px;font-family:inherit;outline:none;box-sizing:border-box"/>
+      </div>
+      <div style="display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap">
+        <span style="font-size:12px;font-weight:900;color:#555;align-self:center;margin-right:2px">詞性：</span>
+        ${[['noun','名詞'],['verb','動詞'],['adj','形容詞'],['other','其他']].map(([v,l],i)=>`
+          <label style="display:flex;align-items:center;gap:3px;cursor:pointer;
+            background:${i===0?'#4CAF50':'#eee'};color:${i===0?'white':'#555'};
+            border-radius:8px;padding:3px 8px;font-size:12px;font-weight:900;
+            font-family:inherit;transition:background 0.2s" id="cw-type-lbl-${v}">
+            <input type="radio" name="cw-type" value="${v}" ${i===0?'checked':''}
+              style="display:none" onchange="[...document.querySelectorAll('[id^=cw-type-lbl-]')].forEach(function(el){el.style.background='#eee';el.style.color='#555'});this.parentElement.style.background='#4CAF50';this.parentElement.style.color='white'"/>
+            ${l}
+          </label>`).join('')}
       </div>
       <div id="cw-preview" style="font-size:12px;color:#888;min-height:30px;margin-bottom:6px;
            background:white;border-radius:8px;padding:6px 8px;line-height:1.6"></div>
@@ -3555,7 +4323,7 @@ function showCustomWordBank(level) {
       <button onclick="showParentDashboard()"
         style="flex:1;padding:9px 4px;border:2px solid #FF6B35;border-radius:12px;background:#FFF3EE;
                color:#FF6B35;font-size:13px;font-weight:900;font-family:inherit;cursor:pointer">
-        🎮 學習進度
+        ⚙️ 學習進度
       </button>
       <button onclick="showCustomWordBank(1)"
         style="flex:1;padding:9px 4px;border:2px solid #4CAF50;border-radius:12px;background:#4CAF50;
@@ -3573,21 +4341,26 @@ function showCustomWordBank(level) {
 
 let _cwPreviewState = null;
 
+function _getCwWordType() {
+  return document.querySelector('input[name="cw-type"]:checked')?.value || 'noun';
+}
+
 function previewCustomWord(level) {
   const en = (document.getElementById('cw-en')?.value || '').trim().toLowerCase();
   const zh = (document.getElementById('cw-zh')?.value || '').trim();
   const prev = document.getElementById('cw-preview');
   if (!en || !zh) { if (prev) prev.textContent = '請先輸入英文和中文'; return; }
-  const templates = SENTENCE_TEMPLATES[level] || SENTENCE_TEMPLATES[1];
+  const wordType = _getCwWordType();
+  const templates = (SENTENCE_TEMPLATES[wordType] || SENTENCE_TEMPLATES.noun)[level] || SENTENCE_TEMPLATES.noun[1];
   const pool = shuffleArray([...Array(templates.length).keys()]);
-  _cwPreviewState = { en, zh, level, pool, slots: [pool[0], pool[1]], next: 2 };
+  _cwPreviewState = { en, zh, level, wordType, pool, slots: [pool[0], pool[1]], next: 2 };
   renderCwPreview();
 }
 
 function refreshCwSentence(slotIdx) {
   if (!_cwPreviewState) return;
   const s = _cwPreviewState;
-  const templates = SENTENCE_TEMPLATES[s.level] || SENTENCE_TEMPLATES[1];
+  const templates = (SENTENCE_TEMPLATES[s.wordType] || SENTENCE_TEMPLATES.noun)[s.level] || SENTENCE_TEMPLATES.noun[1];
   const other = slotIdx === 0 ? s.slots[1] : s.slots[0];
   for (let tries = 0; tries < templates.length; tries++) {
     const candidate = s.pool[s.next % s.pool.length];
@@ -3601,7 +4374,7 @@ function renderCwPreview() {
   const s = _cwPreviewState;
   const prev = document.getElementById('cw-preview');
   if (!s || !prev) return;
-  const templates = SENTENCE_TEMPLATES[s.level] || SENTENCE_TEMPLATES[1];
+  const templates = (SENTENCE_TEMPLATES[s.wordType] || SENTENCE_TEMPLATES.noun)[s.level] || SENTENCE_TEMPLATES.noun[1];
   const s0 = templates[s.slots[0]](s.en, s.zh);
   const s1 = templates[s.slots[1]](s.en, s.zh);
   const btnStyle = `background:#FFF9C4;border:1.5px solid #FFD93D;border-radius:8px;
@@ -3619,13 +4392,14 @@ function renderCwPreview() {
 }
 
 function submitCustomWord(level) {
-  const en    = document.getElementById('cw-en')?.value || '';
-  const zh    = document.getElementById('cw-zh')?.value || '';
-  const emoji = document.getElementById('cw-emoji')?.value || '📝';
+  const en       = document.getElementById('cw-en')?.value || '';
+  const zh       = document.getElementById('cw-zh')?.value || '';
+  const emoji    = document.getElementById('cw-emoji')?.value || '📝';
+  const wordType = _getCwWordType();
   if (!en.trim() || !zh.trim()) {
     alert('請填寫英文單字和中文翻譯！'); return;
   }
-  if (addCustomWord(en, zh, emoji, level)) {
+  if (addCustomWord(en, zh, emoji, level, wordType)) {
     showCustomWordBank(level);
   }
 }
@@ -3738,6 +4512,28 @@ function toggleSound() {
   localStorage.setItem('soundEnabled', soundEnabled ? '1' : '0');
   const btn = document.getElementById('pm-sound-btn');
   if (btn) btn.textContent = soundEnabled ? '🔊 音效開啟' : '🔇 音效關閉';
+}
+function deletePlayer(profileId) {
+  const p = (gameState.progress.players || []).find(x => x.id === profileId);
+  if (!p) return;
+  const target = document.getElementById('pm-tab-content') || document.getElementById('pm-content');
+  target.innerHTML = `
+    <div style="text-align:center;padding:16px 0">
+      <div style="font-size:52px;margin-bottom:12px">${CHARACTER_EMOJIS[p.character]||'🐧'}</div>
+      <div style="font-size:20px;font-weight:900;color:#e53935;margin-bottom:8px">刪除「${p.name}」的紀錄？</div>
+      <div style="font-size:14px;color:#666;margin-bottom:24px">學習進度、紀錄將全部清除，無法復原！</div>
+      <div style="display:flex;gap:12px">
+        <button class="btn btn-secondary" onclick="showParentDashboard()" style="flex:1">← 取消</button>
+        <button class="btn" style="background:#e53935;color:white;flex:1;font-size:16px"
+          onclick="confirmDeletePlayer('${profileId}')">🗑️ 確定刪除</button>
+      </div>
+    </div>`;
+}
+function confirmDeletePlayer(profileId) {
+  gameState.progress.players = (gameState.progress.players || []).filter(p => p.id !== profileId);
+  saveProgress();
+  initStart();
+  showParentDashboard();
 }
 function confirmClearProgress() {
   const target = document.getElementById('pm-tab-content') || document.getElementById('pm-content');
