@@ -247,6 +247,7 @@
   }
   @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
   @keyframes fadeIn { from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
   @keyframes starFly {
     0%{transform:translate(0,0) scale(1);opacity:1}
     100%{transform:translate(var(--dx),var(--dy)) scale(0);opacity:0}
@@ -599,18 +600,24 @@
 
   <!-- CHARACTER SELECT -->
   <div id="screen-character" class="screen">
-    <h2 class="screen-title">選擇你的角色！</h2>
-    <div id="char-grid-container"></div>
-    <div id="name-input-area" class="name-input-area" style="display:none;">
-      <div class="name-input-label">幫你的夥伴取個名字吧！</div>
-      <div class="name-input-row">
-        <div class="name-char-preview" id="name-char-preview"></div>
-        <input type="text" id="char-name-input" class="name-text-input"
-               placeholder="例如：小白、皮卡..." maxlength="6" oninput="onNameInput()"/>
-      </div>
-      <div class="name-hint">限 1–6 個字</div>
+    <h2 class="screen-title">選擇你的夥伴</h2>
+    <div id="char-grid-container" style="padding-bottom: 8px"></div>
+  </div>
+
+  <!-- 命名浮動底部面板（固定在畫面底部） -->
+  <div id="name-input-area" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;
+       background:white;border-radius:24px 24px 0 0;padding:16px 20px 28px;
+       box-shadow:0 -4px 24px rgba(0,0,0,0.15);animation:slideUp 0.25s ease">
+    <div style="font-size:17px;font-weight:900;color:#333;margin-bottom:10px;text-align:center">
+      幫你的夥伴取個名字吧！
     </div>
-    <button class="btn btn-primary" id="btn-confirm-char" onclick="confirmCharacter()" style="display:none;">
+    <div class="name-input-row" style="margin-bottom:6px">
+      <div class="name-char-preview" id="name-char-preview"></div>
+      <input type="text" id="char-name-input" class="name-text-input"
+             placeholder="例如：小白、皮卡..." maxlength="9" oninput="onNameInput()"/>
+    </div>
+    <div class="name-hint" style="text-align:center;margin-bottom:12px">限 1–9 個字</div>
+    <button class="btn btn-primary" id="btn-confirm-char" onclick="confirmCharacter()" style="display:none;width:100%">
       開始冒險！🚀
     </button>
   </div>
@@ -680,7 +687,7 @@
   <!-- QUIZ RESULT (perfect = hammer / noreward = encouragement) -->
   <div id="screen-quiz-result" class="screen">
     <div class="result-icon" id="result-icon"></div>
-    <div class="result-plus1" id="result-plus1" style="display:none;">+1 🔨</div>
+    <div class="result-plus1" id="result-plus1" style="display:none;text-align:center">+1</div>
     <div class="result-title" id="result-title"></div>
     <div class="result-subtitle" id="result-subtitle"></div>
     <button class="btn" id="result-btn" onclick="goToMap()">繼續冒險 🗺️</button>
@@ -1452,6 +1459,7 @@ function showScreen(id) {
     nav.classList.remove('hidden');
   }
   if (id === 'character') renderCharacterSelect();
+  else document.getElementById('name-input-area').style.display = 'none';
 }
 function goHome() {
   resetGame();
@@ -1576,15 +1584,17 @@ function selectCharacter(char, el) {
   const nameArea = document.getElementById('name-input-area');
   nameArea.style.display = 'block';
   document.getElementById('name-char-preview').textContent = CHARACTER_EMOJIS[char];
-  document.getElementById('char-name-input').value = '';
+  const input = document.getElementById('char-name-input');
+  input.value = '';
   gameState.player.name = '';
   document.getElementById('btn-confirm-char').style.display = 'none';
+  setTimeout(() => input.focus(), 100);
 }
 
 function checkCharacterUnlocks() {
   if (!gameState.progress.unlockedCharacters) gameState.progress.unlockedCharacters = [];
   const allSessions = (gameState.progress.players || []).reduce(
-    (max, p) => Math.max(max, (p.profile && p.profile.sessionsCompleted) || 0), 0
+    (max, p) => Math.max(max, p.sessionsCompleted || 0), 0
   );
   let newUnlock = null;
   UNLOCK_CHARS.forEach(c => {
@@ -3722,46 +3732,45 @@ function bossBattleEnd(playerWon) {
   diceRolling = false;
   if (playerWon) {
     playSound('hammer'); spawnStars();
-    try {
-      gameState.progress.completedSessions.push({ level: gameState.player.level, date: Date.now() });
-      // Update player profile
-      const profile = getCurrentProfile();
-      if (profile) {
-        gameState.session.wordGroups.flat().forEach(id => {
-          if (!profile.learnedWordIds.includes(id)) profile.learnedWordIds.push(id);
-        });
-        gameState.session.wrongWords.forEach(id => {
-          if (!profile.wrongWordIds) profile.wrongWordIds = [];
-          if (!profile.wrongWordIds.includes(id)) profile.wrongWordIds.push(id);
-        });
-        profile.sessionsCompleted = (profile.sessionsCompleted || 0) + 1;
-        profile.lastPlayed = Date.now();
-        // 學完全部 Level 1 單字後解鎖 Level 2
-        if (!profile.unlockedLevels) profile.unlockedLevels = [1];
-        if (profile.learnedWordIds.length >= ALL_WORD_IDS.length) {
-          if (!profile.unlockedLevels.includes(2)) profile.unlockedLevels.push(2);
-        }
-        if (profile.learnedWordIds.length >= ALL_WORD_IDS.length * 2) {
-          if (!profile.unlockedLevels.includes(3)) profile.unlockedLevels.push(3);
-        }
-        // 記錄每局紀錄
-        if (!profile.sessionHistory) profile.sessionHistory = [];
-        profile.sessionHistory.push({
-          level: wonLv, date: Date.now(),
-          learned: profile.learnedWordIds.length,
-          hammers: gameState.session.hammerCount || 0
-        });
-      }
-      const nextLv = gameState.player.level + 1;
-      if (nextLv <= 3 && !gameState.progress.unlockedLevels.includes(nextLv))
-        gameState.progress.unlockedLevels.push(nextLv);
-      gameState.session.wrongWords.forEach(id => {
-        if (!gameState.progress.totalWrongWords.includes(id))
-          gameState.progress.totalWrongWords.push(id);
+    // 防呆：確保陣列欄位存在
+    if (!gameState.progress.completedSessions) gameState.progress.completedSessions = [];
+    if (!gameState.progress.totalWrongWords)   gameState.progress.totalWrongWords   = [];
+    gameState.progress.completedSessions.push({ level: gameState.player.level, date: Date.now() });
+    // 更新玩家 profile
+    const profile = getCurrentProfile();
+    if (profile) {
+      if (!profile.learnedWordIds) profile.learnedWordIds = [];
+      if (!profile.wrongWordIds)   profile.wrongWordIds   = [];
+      if (!profile.unlockedLevels) profile.unlockedLevels = [1];
+      if (!profile.sessionHistory) profile.sessionHistory = [];
+      (gameState.session.wordGroups || []).flat().forEach(id => {
+        if (!profile.learnedWordIds.includes(id)) profile.learnedWordIds.push(id);
       });
-      clearSavedSession();
-      saveProgress();
-      // 角色解鎖檢查
+      (gameState.session.wrongWords || []).forEach(id => {
+        if (!profile.wrongWordIds.includes(id)) profile.wrongWordIds.push(id);
+      });
+      profile.sessionsCompleted = (profile.sessionsCompleted || 0) + 1;
+      profile.lastPlayed = Date.now();
+      if (profile.learnedWordIds.length >= ALL_WORD_IDS.length  && !profile.unlockedLevels.includes(2)) profile.unlockedLevels.push(2);
+      if (profile.learnedWordIds.length >= ALL_WORD_IDS.length * 2 && !profile.unlockedLevels.includes(3)) profile.unlockedLevels.push(3);
+      profile.sessionHistory.push({
+        level: wonLv, date: Date.now(),
+        learned: profile.learnedWordIds.length,
+        hammers: gameState.session.hammerCount || 0
+      });
+    }
+    const nextLv = gameState.player.level + 1;
+    if (nextLv <= 3 && !(gameState.progress.unlockedLevels || []).includes(nextLv)) {
+      if (!gameState.progress.unlockedLevels) gameState.progress.unlockedLevels = [1];
+      gameState.progress.unlockedLevels.push(nextLv);
+    }
+    (gameState.session.wrongWords || []).forEach(id => {
+      if (!gameState.progress.totalWrongWords.includes(id)) gameState.progress.totalWrongWords.push(id);
+    });
+    clearSavedSession();
+    saveProgress();
+    // 角色解鎖檢查
+    try {
       const newUnlock = checkCharacterUnlocks();
       if (newUnlock) {
         saveProgress();
