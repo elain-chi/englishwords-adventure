@@ -1460,6 +1460,11 @@ function showScreen(id) {
   }
   if (id === 'character') renderCharacterSelect();
   else document.getElementById('name-input-area').style.display = 'none';
+  if (id === 'level') {
+    selectedLevel = null;
+    document.getElementById('btn-confirm-level').style.display = 'none';
+    document.querySelectorAll('.level-card').forEach(c => c.classList.remove('selected'));
+  }
 }
 function goHome() {
   resetGame();
@@ -2524,7 +2529,7 @@ function triggerReview() {
           <div style="font-size:20px;font-weight:900;color:#2E7D32;margin-top:4px">獲得一顆飯糰！</div>
           <div style="font-size:14px;color:#888;margin-bottom:12px">現有 ${gameState.session.onigiriCount} 顆</div>
           <button class="btn btn-green" id="feed-btn" onclick="reviewFeedAndContinue()">
-            ${animalDisplayEmoji} 餵${animalName}！
+            🍙 餵飯糰！
           </button>
         </div>`);
     } else {
@@ -2704,7 +2709,7 @@ function triggerChallenge() {
           </div><br>
           <span id="chal-melon-big" style="font-size:40px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍉</span>
           <button class="btn btn-green" id="chal-feed-btn" onclick="challengeFeedWatermelon()" style="margin-top:10px;display:block;width:100%">
-            餵${animalName}
+            🍉 餵西瓜！
           </button>
         </div>`;
     } else {
@@ -2822,7 +2827,7 @@ function triggerSentenceChallenge(word, wordId, learnedIds, prevPos) {
           </div><br>
           <span id="chal-melon-big" style="font-size:40px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍉</span>
           <button class="btn btn-green" id="chal-feed-btn" onclick="challengeFeedWatermelon()" style="margin-top:10px;display:block;width:100%">
-            餵${animalName}
+            🍉 餵西瓜！
           </button>
         </div>`;
     } else {
@@ -3597,10 +3602,7 @@ function showBossLightningQ() {
              </div>
            </div>`
         : `<button class="btn btn-primary" style="margin-top:12px" onclick="_bossLightningNext()">繼續！</button>`;
-      showEventOverlay(`${_bossHUD()}
-        <div style="font-size:44px;margin:10px 0">⚡</div>
-        <div class="event-result-banner bad">答對 ${score}/3，被魔王攻擊！</div>
-        ${hamDialog}`);
+      window._bossLightningNext = () => { bossState.round++; showBossRound(); };
       window._bossLightHC = function(useHammer) {
         window._bossLightHC = null;
         if (useHammer && gameState.session.hammerCount > 0) {
@@ -3619,6 +3621,10 @@ function showBossLightningQ() {
              <button class="btn btn-primary" style="margin-top:8px" onclick="_bossLightningNext()">繼續！</button>`);
         }
       };
+      showEventOverlay(`${_bossHUD()}
+        <div style="font-size:44px;margin:10px 0">⚡</div>
+        <div class="event-result-banner bad">答對 ${score}/3，被魔王攻擊！</div>
+        ${hamDialog}`);
     }
     window._bossLightningNext = () => { bossState.round++; showBossRound(); };
     return;
@@ -3634,6 +3640,7 @@ function showBossLightningQ() {
     <div class="boss-q-type">⚡ 閃電回合 ${bossState.lightningIdx+1} / 3</div>
     <div class="timer-bar-wrap"><div class="timer-bar" id="lt-bar" style="width:100%;background:#FFD93D"></div></div>
     <div style="font-size:60px;margin:6px 0">${word.emoji}</div>
+    <div style="font-size:24px;font-weight:900;color:#333;margin-bottom:6px">${word.chinese}</div>
     <div class="event-answers">
       ${opts.map(o=>`<button class="event-answer-btn" data-id="${o.id}" onclick="_ltAnswer('${o.id}','${word.id}')">${o.english}</button>`).join('')}
     </div>`);
@@ -3754,7 +3761,7 @@ function bossBattleEnd(playerWon) {
       if (profile.learnedWordIds.length >= ALL_WORD_IDS.length  && !profile.unlockedLevels.includes(2)) profile.unlockedLevels.push(2);
       if (profile.learnedWordIds.length >= ALL_WORD_IDS.length * 2 && !profile.unlockedLevels.includes(3)) profile.unlockedLevels.push(3);
       profile.sessionHistory.push({
-        level: wonLv, date: Date.now(),
+        level: gameState.player.level, date: Date.now(),
         learned: profile.learnedWordIds.length,
         hammers: gameState.session.hammerCount || 0
       });
