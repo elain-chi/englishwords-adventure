@@ -1709,13 +1709,17 @@ function startGame() {
   const baseIds   = [...ALL_WORD_IDS, ...customIds.filter(id => !ALL_WORD_IDS.includes(id))];
   const unlearned = baseIds.filter(id => !learnedSoFar.includes(id));
   const learned   = baseIds.filter(id =>  learnedSoFar.includes(id));
-  // Fill up to 12: unlearned first, then repeats if needed
+  // L1 每組 2 個單字（共 8 個）；L2+ 每組 3 個（共 12 個）
+  const wordsPerGroup = gameState.player.level === 1 ? 2 : 3;
+  const totalWords = wordsPerGroup * 4;
   const pool = [...shuffleArray(unlearned), ...shuffleArray(learned)];
-  const shuffled = pool.slice(0, 12);
-
+  const shuffled = pool.slice(0, totalWords);
+  const g = wordsPerGroup;
   gameState.session.wordGroups = [
-    shuffled.slice(0,3), shuffled.slice(3,6),
-    shuffled.slice(6,9), shuffled.slice(9,12)
+    shuffled.slice(0,   g),
+    shuffled.slice(g,   g*2),
+    shuffled.slice(g*2, g*3),
+    shuffled.slice(g*3, g*4)
   ];
   gameState.session.mapCells = buildMapCells();
   // 預先平均分配幸運格獎勵（避免全部抽到同一種）
@@ -2283,7 +2287,8 @@ function updateHUD() {
   document.getElementById('hud-player').textContent   = `${emoji} ${gameState.player.name}`;
   document.getElementById('hud-hammers').textContent = `🔨×${gameState.session.hammerCount}`;
   const fedTotal = gameState.session.animalFed || 0;
-  const fedThisLevel = fedTotal % ANIMAL_LEVEL_NEED;
+  const lv = getAnimalLevel();
+  const fedThisLevel = fedTotal - LEVEL_THRESHOLDS[Math.min(lv, LEVEL_THRESHOLDS.length - 1)];
   document.getElementById('hud-onigiri').innerHTML = `🍙×${fedThisLevel} ${getAnimalEmoji()}`;
   document.getElementById('hud-position').textContent = `${gameState.session.currentPosition}/40`;
 }
@@ -2522,13 +2527,13 @@ function triggerReview() {
       const _charKey = gameState.player.character || 'penguin';
       const animalDisplayEmoji = CHARACTER_EMOJIS[_charKey] || '🐧';
       const animalName = CHARACTER_NAMES[_charKey] || '夥伴';
-      document.getElementById('event-modal').insertAdjacentHTML('beforeend', `
-        <div style="text-align:center;padding-top:8px;position:relative">
-          <span id="rev-animal-big" style="font-size:64px;display:block;animation:bounceIn 0.4s ease-out both">${animalDisplayEmoji}</span>
-          <span id="rev-onigiri-big" style="font-size:52px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍙</span>
-          <div style="font-size:20px;font-weight:900;color:#2E7D32;margin-top:4px">獲得一顆飯糰！</div>
-          <div style="font-size:14px;color:#888;margin-bottom:12px">現有 ${gameState.session.onigiriCount} 顆</div>
-          <button class="btn btn-green" id="feed-btn" onclick="reviewFeedAndContinue()">
+      showEventOverlay(`
+        <div style="text-align:center;padding:4px 0">
+          <div style="font-size:22px;font-weight:900;color:#2E7D32;margin-bottom:10px">🎉 獲得一顆飯糰！</div>
+          <span id="rev-animal-big" style="font-size:72px;display:block;animation:bounceIn 0.4s ease-out both">${animalDisplayEmoji}</span>
+          <span id="rev-onigiri-big" style="font-size:56px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍙</span>
+          <div style="font-size:14px;color:#888;margin:8px 0 16px">現有 ${gameState.session.onigiriCount} 顆</div>
+          <button class="btn btn-green" id="feed-btn" onclick="reviewFeedAndContinue()" style="width:100%">
             🍙 餵飯糰！
           </button>
         </div>`);
@@ -2565,13 +2570,17 @@ function reviewFeedAndContinue() {
     const newLevel = getAnimalLevel();
     if (newLevel > prevLevel) {
       playSound('hammer'); spawnStars();
-      const isMax = newLevel >= 4;
-      const lvlIcon = isMax
-        ? '<span style="font-size:52px;letter-spacing:4px;animation:bounceIn 0.5s ease-out both">⭐⭐⭐⭐⭐</span>'
-        : `<span class="event-icon" style="font-size:76px;animation:bounceIn 0.5s ease-out both">${getAnimalEmoji()}</span>`;
+      const isStar = newLevel >= 4;
+      const isMax  = newLevel >= 8;
+      const stars  = isStar ? newLevel - 3 : 0;
+      const petEmoji = getAnimalEmoji();
+      const lvlIcon = isStar
+        ? `<span style="font-size:72px;display:block;animation:bounceIn 0.5s ease-out both">${petEmoji}</span>
+           <div style="font-size:${stars>=4?'26px':'32px'};letter-spacing:4px;animation:bounceIn 0.6s 0.1s ease-out both">${'⭐'.repeat(stars)}</div>`
+        : `<span class="event-icon" style="font-size:76px;animation:bounceIn 0.5s ease-out both">${petEmoji}</span>`;
       showEventOverlay(`
-        ${lvlIcon}
-        <div class="event-title" style="color:#FF6B35">🎉 ${isMax ? '五星傳說達成！！' : '夥伴升級了！！'}</div>
+        <div style="text-align:center">${lvlIcon}</div>
+        <div class="event-title" style="color:#FF6B35">🎉 ${isMax ? '五星傳說達成！！' : isStar ? `${stars}星傳說！` : '夥伴升級了！！'}</div>
         <div style="font-size:20px;font-weight:900;margin:8px 0">${ANIMAL_LEVEL_NAMES[newLevel]}</div>
         <div style="font-size:14px;color:#888">${isMax ? '已達最高等級！太棒了！' : '繼續加油！'}</div>`);
       setTimeout(hideEventOverlay, 2500);
@@ -2700,18 +2709,16 @@ function triggerChallenge() {
       const charKey  = gameState.player.character || 'penguin';
       const animalEmoji = CHARACTER_EMOJIS[charKey] || '🐧';
       const animalName  = CHARACTER_NAMES[charKey] || '夥伴';
-      document.getElementById('chal-result').innerHTML = `
-        <div class="event-result-banner good" style="margin-top:12px">✅ 答對了！獲得一片西瓜！🍉</div>
-        <div style="text-align:center;padding-top:10px">
-          <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:10px">
-            <span id="chal-animal-big" style="font-size:64px;animation:bounceIn 0.4s ease-out both">${animalEmoji}</span>
-            <span id="chal-happy-notes" style="font-size:28px;line-height:1.4;opacity:0;transition:opacity 0.3s">🎵<br>🎶</span>
-          </div><br>
-          <span id="chal-melon-big" style="font-size:40px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍉</span>
-          <button class="btn btn-green" id="chal-feed-btn" onclick="challengeFeedWatermelon()" style="margin-top:10px;display:block;width:100%">
+      showEventOverlay(`
+        <div style="text-align:center;padding:4px 0">
+          <div style="font-size:22px;font-weight:900;color:#1B5E20;margin-bottom:10px">🎉 獲得一片西瓜！</div>
+          <span id="chal-animal-big" style="font-size:72px;display:block;animation:bounceIn 0.4s ease-out both">${animalEmoji}</span>
+          <span id="chal-happy-notes" style="font-size:28px;line-height:1.4;opacity:0;transition:opacity 0.3s;display:block;margin:4px 0">🎵 🎶</span>
+          <span id="chal-melon-big" style="font-size:56px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍉</span>
+          <button class="btn btn-green" id="chal-feed-btn" onclick="challengeFeedWatermelon()" style="margin-top:14px;width:100%">
             🍉 餵西瓜！
           </button>
-        </div>`;
+        </div>`);
     } else {
       playSound('wrong');
       if (!gameState.session.wrongWords.includes(wId)) gameState.session.wrongWords.push(wId);
@@ -2818,18 +2825,16 @@ function triggerSentenceChallenge(word, wordId, learnedIds, prevPos) {
     });
     if (selected === correct) {
       playSound('correct'); spawnStars();
-      document.getElementById('chal-result').innerHTML = `
-        <div class="event-result-banner good" style="margin-top:12px">✅ 答對了！獲得一片西瓜！🍉</div>
-        <div style="text-align:center;padding-top:10px">
-          <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:10px">
-            <span id="chal-animal-big" style="font-size:64px;animation:bounceIn 0.4s ease-out both">${animalEmoji}</span>
-            <span id="chal-happy-notes" style="font-size:28px;line-height:1.4;opacity:0;transition:opacity 0.3s">🎵<br>🎶</span>
-          </div><br>
-          <span id="chal-melon-big" style="font-size:40px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍉</span>
-          <button class="btn btn-green" id="chal-feed-btn" onclick="challengeFeedWatermelon()" style="margin-top:10px;display:block;width:100%">
+      showEventOverlay(`
+        <div style="text-align:center;padding:4px 0">
+          <div style="font-size:22px;font-weight:900;color:#1B5E20;margin-bottom:10px">🎉 獲得一片西瓜！</div>
+          <span id="chal-animal-big" style="font-size:72px;display:block;animation:bounceIn 0.4s ease-out both">${animalEmoji}</span>
+          <span id="chal-happy-notes" style="font-size:28px;line-height:1.4;opacity:0;transition:opacity 0.3s;display:block;margin:4px 0">🎵 🎶</span>
+          <span id="chal-melon-big" style="font-size:56px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍉</span>
+          <button class="btn btn-green" id="chal-feed-btn" onclick="challengeFeedWatermelon()" style="margin-top:14px;width:100%">
             🍉 餵西瓜！
           </button>
-        </div>`;
+        </div>`);
     } else {
       playSound('wrong');
       if (!gameState.session.wrongWords.includes(wId)) gameState.session.wrongWords.push(wId);
@@ -2999,57 +3004,76 @@ function triggerTeleport() {
 // ── 🐾 動物飼育系統 ─────────────────────────────────────
 // 每3顆飯糰升1級，共5個等級（0→4），第4級為五星傳說
 const ANIMAL_LEVEL_EMOJIS = {
-  penguin: ['🥚','🐣','🐥','🐧','⭐'],
-  lion:    ['🥚','🐱','😺','🦁','⭐'],
-  rabbit:  ['🥚','🐰','🐇','🐇','⭐'],
-  cat:     ['🥚','🐱','😸','🐈','⭐'],
-  dog:     ['🥚','🐶','🐕','🦮','⭐'],
-  bear:    ['🥚','🐻','🦊','🦊','⭐'],
-  panda:   ['🥚','🐼','🐼','🐼','⭐'],
-  raccoon: ['🥚','🦝','🦝','🦝','⭐'],
-  dolphin: ['🥚','🐬','🐬','🐬','⭐'],
-  unicorn: ['🥚','🦄','🦄','🦄','⭐'],
+  penguin: ['🥚','🐣','🐥','🐧'],
+  lion:    ['🥚','🐱','😺','🦁'],
+  rabbit:  ['🥚','🐰','🐇','🐇🥕'],
+  cat:     ['🥚','🐱','😸','🐈'],
+  dog:     ['🥚','🐶','🐕','🦮'],
+  bear:    ['🥚','🐻','🦊','🦊🍗'],
+  panda:   ['🥚','🐼','🐼','🐼'],
+  raccoon: ['🥚','🦝','🦝','🦝'],
+  dolphin: ['🥚','🐬','🐬','🐬'],
+  unicorn: ['🥚','🦄','🦄','🦄'],
 };
-const ANIMAL_LEVEL_NAMES = ['蛋蛋期 🌱','小寶寶 🐣','成長期 💪','成熟期 🔥','五星傳說 ⭐'];
-const ANIMAL_LEVEL_NEED = 3; // 每級需要幾顆飯糰
+const ANIMAL_LEVEL_NAMES = [
+  '蛋蛋期 🌱','小寶寶 🐣','成長期 💪','成熟期 🔥',
+  '⭐ 一星傳說','⭐⭐ 二星傳說','⭐⭐⭐ 三星傳說','⭐⭐⭐⭐ 四星傳說','⭐⭐⭐⭐⭐ 五星傳說'
+];
+// 升級門檻（累積飯糰數）：0→1:3顆, 1→2:6顆, 2→3:9顆, 3+每星:10顆
+const LEVEL_THRESHOLDS = [0, 3, 9, 18, 28, 38, 48, 58, 68];
 
 function getAnimalLevel() {
   const fed = gameState.session.animalFed || 0;
-  return Math.min(4, Math.floor(fed / ANIMAL_LEVEL_NEED));
+  for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (fed >= LEVEL_THRESHOLDS[i]) return i;
+  }
+  return 0;
+}
+function getAnimalStageEmoji(char, level) {
+  const stage = Math.min(3, level);
+  return (ANIMAL_LEVEL_EMOJIS[char] || ANIMAL_LEVEL_EMOJIS.penguin)[stage];
 }
 function getAnimalEmoji() {
   const char = gameState.player.character || 'penguin';
-  const level = getAnimalLevel();
-  if (level >= 4) return '⭐'; // 五星傳說
-  return (ANIMAL_LEVEL_EMOJIS[char] || ANIMAL_LEVEL_EMOJIS.penguin)[level];
+  return getAnimalStageEmoji(char, getAnimalLevel());
 }
 
 function showAnimalOverlay() {
-  const fed   = gameState.session.animalFed || 0;
-  const level = getAnimalLevel();
+  const fed     = gameState.session.animalFed || 0;
+  const level   = getAnimalLevel();
   const onigiri = gameState.session.onigiriCount || 0;
-  const fedThisLevel = fed % ANIMAL_LEVEL_NEED;
+  const isMaxLevel = level >= 8;
+  const isStar  = level >= 4;
+  const stars   = isStar ? level - 3 : 0;
+
+  // 計算此級進度
+  const threshold = LEVEL_THRESHOLDS[Math.min(level, LEVEL_THRESHOLDS.length - 1)];
+  const nextThreshold = LEVEL_THRESHOLDS[Math.min(level + 1, LEVEL_THRESHOLDS.length - 1)];
+  const fedThisLevel = fed - threshold;
+  const needed = isMaxLevel ? 0 : nextThreshold - threshold;
+
   const levelName = ANIMAL_LEVEL_NAMES[level];
-  const isMaxLevel = level >= 4;
-
-  // 大圖：最高級顯示五顆星，否則顯示動物
   const charKey = gameState.player.character || 'penguin';
-  const stageEmoji = isMaxLevel
-    ? '<span style="letter-spacing:4px">⭐⭐⭐⭐⭐</span>'
-    : `<span style="font-size:72px">${(ANIMAL_LEVEL_EMOJIS[charKey]||ANIMAL_LEVEL_EMOJIS.penguin)[level]}</span>`;
+  const petEmoji = getAnimalStageEmoji(charKey, level);
 
-  // 進度飯糰點（3格）
-  const dots = isMaxLevel ? '' : Array.from({length: ANIMAL_LEVEL_NEED}, (_,i) =>
-    `<span style="font-size:24px">${i < fedThisLevel ? '🍙' : '⬜'}</span>`).join(' ');
+  // 大圖：成熟期+搭配星星，否則顯示當前階段動物
+  const stageDisplay = isStar
+    ? `<div style="font-size:72px;line-height:1">${petEmoji}</div>
+       <div style="font-size:${stars>=4?'26px':'32px'};letter-spacing:4px;margin-top:4px">${'⭐'.repeat(stars)}</div>`
+    : `<div style="font-size:72px">${petEmoji}</div>`;
+
+  // 進度點（依此級所需數量動態顯示）
+  const dots = isMaxLevel ? '' : Array.from({length: needed}, (_,i) =>
+    `<span style="font-size:22px">${i < fedThisLevel ? '🍙' : '⬜'}</span>`).join(' ');
 
   showEventOverlay(`
-    <div class="event-icon" style="font-size:${isMaxLevel?'52px':'72px'};margin-bottom:6px">${stageEmoji}</div>
+    <div style="text-align:center;margin-bottom:6px">${stageDisplay}</div>
     <div class="event-title">${gameState.player.name} 的小夥伴</div>
     <div style="font-size:18px;font-weight:900;color:#FF6B35;margin-bottom:10px">${levelName}</div>
     <div style="font-size:14px;color:#888;margin-bottom:6px;font-weight:700">
-      ${isMaxLevel ? '🎉 五星傳說！最高等級！' : `升級還需 ${ANIMAL_LEVEL_NEED - fedThisLevel} 顆飯糰`}
+      ${isMaxLevel ? '🎉 五星傳說！最高等級！' : `升級還需 ${needed - fedThisLevel} 顆飯糰`}
     </div>
-    <div style="margin-bottom:16px;letter-spacing:4px">${dots}</div>
+    <div style="margin-bottom:16px;letter-spacing:2px">${dots}</div>
     <div style="font-size:16px;font-weight:700;color:#333;margin-bottom:14px">現有飯糰：🍙 × ${onigiri}</div>
     <button class="btn btn-green" onclick="feedAnimal()" ${onigiri<1||isMaxLevel?'disabled style="opacity:0.4"':''}>
       🍙 餵食一顆飯糰
@@ -3068,13 +3092,17 @@ function feedAnimal() {
   const newLevel = getAnimalLevel();
   if (newLevel > prevLevel) {
     playSound('hammer'); spawnStars();
-    const isMax = newLevel >= 4;
-    const bigDisplay = isMax
-      ? '<span style="font-size:52px;letter-spacing:4px;animation:bounceIn 0.5s ease-out both">⭐⭐⭐⭐⭐</span>'
-      : `<span class="event-icon" style="font-size:80px;animation:bounceIn 0.5s ease-out both">${getAnimalEmoji()}</span>`;
+    const isStar = newLevel >= 4;
+    const isMax  = newLevel >= 8;
+    const stars  = isStar ? newLevel - 3 : 0;
+    const petEmoji = getAnimalEmoji();
+    const bigDisplay = isStar
+      ? `<span style="font-size:80px;display:block;animation:bounceIn 0.5s ease-out both">${petEmoji}</span>
+         <div style="font-size:${stars>=4?'28px':'34px'};letter-spacing:4px;animation:bounceIn 0.6s 0.1s ease-out both">${'⭐'.repeat(stars)}</div>`
+      : `<span class="event-icon" style="font-size:80px;animation:bounceIn 0.5s ease-out both">${petEmoji}</span>`;
     showEventOverlay(`
-      ${bigDisplay}
-      <div class="event-title" style="color:#FF6B35">🎉 ${isMax ? '五星傳說達成！！' : '升級了！！'}</div>
+      <div style="text-align:center">${bigDisplay}</div>
+      <div class="event-title" style="color:#FF6B35">🎉 ${isMax ? '五星傳說達成！！' : isStar ? `${stars}星傳說！` : '升級了！！'}</div>
       <div style="font-size:20px;font-weight:900;color:#333;margin:10px 0">${ANIMAL_LEVEL_NAMES[newLevel]}</div>
       <div style="font-size:16px;color:#666;margin-bottom:16px">
         ${isMax ? '你的夥伴已達到最高等級！太厲害了！🌟' : '小夥伴變得更強壯了！'}
