@@ -665,8 +665,8 @@
     <div class="preQuiz-char-badge" id="preQuiz-char-badge"></div>
     <div class="preQuiz-brain">🧠</div>
     <div class="preQuiz-title">小測驗開始！</div>
-    <div class="preQuiz-subtitle">三個單字都學完了！</div>
-    <div class="preQuiz-hint">🔨 三題全對才能得到槌子！</div>
+    <div class="preQuiz-subtitle" id="preQuiz-subtitle">三個單字都學完了！</div>
+    <div class="preQuiz-hint" id="preQuiz-hint">🔨 三題全對才能得到槌子！</div>
   </div>
 
   <!-- QUIZ -->
@@ -2066,7 +2066,11 @@ function nextWordCard() {
 // ===================================================
 function showPreQuizTransition() {
   const charEmoji = CHARACTER_EMOJIS[gameState.player.character] || '🐧';
+  const wordCount = learnState.words.length;
+  const countZh = wordCount === 2 ? '兩' : wordCount === 3 ? '三' : String(wordCount);
   document.getElementById('preQuiz-char-badge').textContent = charEmoji;
+  document.getElementById('preQuiz-subtitle').textContent = `${countZh}個單字都學完了！`;
+  document.getElementById('preQuiz-hint').textContent = `🔨 ${countZh}題全對才能得到槌子！`;
   showScreen('preQuiz');
   spawnStars();
   setTimeout(startQuiz, 1800);
@@ -2176,6 +2180,21 @@ function quizComplete() {
   }
 
   showScreen('quiz-result');
+
+  // 複習模式：改寫繼續按鈕行為
+  if (gameState.session.isReviewMode) {
+    const btn = document.getElementById('result-btn');
+    const nextIdx = (gameState.session.currentGroupIndex || 0) + 1;
+    const groups  = gameState.session.wordGroups || [];
+    const hasMore = nextIdx < groups.length && groups[nextIdx].length > 0;
+    if (hasMore) {
+      btn.textContent = `繼續複習 第${nextIdx + 1}組 →`;
+      btn.onclick = () => startLearningPhase(nextIdx);
+    } else {
+      btn.textContent = '完成複習！🎉';
+      btn.onclick = showReviewComplete;
+    }
+  }
 }
 
 // ===================================================
@@ -2212,6 +2231,51 @@ function buildMapCells() {
     }
   }
   return cells;
+}
+
+// ===================================================
+// REVIEW SESSION (從 Game Center 進入的單局複習)
+// ===================================================
+function startReviewSession(wordIds, level, playerProfileId) {
+  closeParentMode();
+  // 確保玩家 profile 正確載入
+  if (playerProfileId) {
+    const p = (gameState.progress.players || []).find(x => x.id === playerProfileId);
+    if (p) {
+      gameState.player.character  = p.character;
+      gameState.player.name       = p.name;
+      gameState.player.level      = p.level || level || 1;
+      gameState.player.profileId  = p.id;
+    }
+  }
+  const usedLevel = level || gameState.player.level || 1;
+  const g = usedLevel === 1 ? 2 : 3;
+  // 補足至 4 組（不足時重複尾端單字）
+  const ids = [...wordIds];
+  while (ids.length < g * 4) ids.push(ids[ids.length - 1] || wordIds[0]);
+  gameState.session = Object.assign(gameState.session || {}, {
+    isReviewMode: true,
+    currentGroupIndex: 0,
+    hammerCount: 0, onigiriCount: 0, animalFed: gameState.session.animalFed || 0,
+    watermelonFed: 0, wrongWords: [],
+    wordGroups: [ids.slice(0,g), ids.slice(g,g*2), ids.slice(g*2,g*3), ids.slice(g*3,g*4)]
+  });
+  startLearningPhase(0);
+}
+
+function showReviewComplete() {
+  const charEmoji = CHARACTER_EMOJIS[gameState.player.character] || '🐧';
+  showScreen('map'); // 讓地圖畫面成為背景
+  showEventOverlay(`
+    <span class="event-icon" style="font-size:80px;animation:bounceIn 0.5s ease-out both">🎓</span>
+    <div style="font-size:26px;font-weight:900;color:#FF6B35;margin-bottom:8px">複習完成！</div>
+    <div style="font-size:44px;margin-bottom:8px">${charEmoji}</div>
+    <div style="font-size:16px;color:#666;margin-bottom:20px">單字都複習過了，繼續加油！💪</div>
+    <button class="btn btn-primary" style="width:100%;margin-bottom:8px"
+      onclick="hideEventOverlay();gameState.session.isReviewMode=false;parentMode()">📊 回學習紀錄</button>
+    <button class="btn" style="background:#eee;color:#333;font-size:15px;width:100%"
+      onclick="hideEventOverlay();gameState.session.isReviewMode=false;resetGame();initStart()">🏠 回首頁</button>`);
+  spawnStars();
 }
 
 function goToMap() {
@@ -3791,7 +3855,9 @@ function bossBattleEnd(playerWon) {
       profile.sessionHistory.push({
         level: gameState.player.level, date: Date.now(),
         learned: profile.learnedWordIds.length,
-        hammers: gameState.session.hammerCount || 0
+        hammers: gameState.session.hammerCount || 0,
+        words: (gameState.session.wordGroups || []).flat(),
+        wrong: [...(gameState.session.wrongWords || [])]
       });
     }
     const nextLv = gameState.player.level + 1;
@@ -3844,9 +3910,14 @@ function showBossResult(playerWon, triggerMaze) {
     const allLearned = learnedCount >= totalWords;
     const bottomHtml = triggerMaze
       ? `<div style="font-size:13px;color:#FF8C00;font-weight:900;margin-bottom:10px">🏚️ 複習迷宮在等你！</div>
-         <button class="btn" style="background:#FF8C00;color:white;width:100%;font-size:18px;padding:14px"
-           onclick="showMazeIntro()">🍞 進入複習迷宮</button>`
-      : `<div style="font-size:13px;color:#aaa;margin-bottom:16px">3 秒後自動回首頁…</div>`;
+         <button class="btn" style="background:#FF8C00;color:white;width:100%;font-size:18px;padding:14px;margin-bottom:8px"
+           onclick="showMazeIntro()">🍞 進入複習迷宮</button>
+         <button class="btn" style="background:#eee;color:#333;font-size:15px;width:100%"
+           onclick="hideEventOverlay();resetGame();initStart()">🏠 回首頁</button>`
+      : `<button class="btn btn-primary" style="width:100%;font-size:18px;padding:14px;margin-bottom:8px"
+           onclick="hideEventOverlay();startGame()">🎮 再挑戰一次！</button>
+         <button class="btn" style="background:#eee;color:#333;font-size:15px;width:100%"
+           onclick="hideEventOverlay();resetGame();initStart()">🏠 回首頁</button>`;
     showEventOverlay(`
       <span class="event-icon" style="font-size:80px;animation:bounceIn 0.5s ease-out both">🏆</span>
       <div style="font-size:28px;font-weight:900;color:#FF6B35;margin-bottom:8px">🎉 恭喜過關！！</div>
@@ -3859,7 +3930,6 @@ function showBossResult(playerWon, triggerMaze) {
       </div>
       ${bottomHtml}`);
     spawnStars();
-    if (!triggerMaze) setTimeout(() => { hideEventOverlay(); resetGame(); initStart(); }, 3000);
   } else {
     const char = CHARACTER_EMOJIS[gameState.player.character] || '🐧';
     showEventOverlay(`
@@ -4601,6 +4671,69 @@ function parentMode() {
   document.getElementById('parent-overlay').style.display = 'flex';
   showParentDashboard();
 }
+function pmShowSession(playerIdx, sessionIdxStr) {
+  const container = document.getElementById(`pm-session-${playerIdx}`);
+  if (!container) return;
+  if (sessionIdxStr === '' || sessionIdxStr === undefined) { container.innerHTML = ''; return; }
+  const p = (window._pmPlayers || [])[playerIdx];
+  if (!p) return;
+  const hi = parseInt(sessionIdxStr, 10);
+  const h  = (p.sessionHistory || [])[hi];
+  if (!h) return;
+
+  const words = (h.words || []);
+  const wrongSet = new Set(h.wrong || []);
+  const hasWords = words.length > 0;
+
+  if (!hasWords) {
+    container.innerHTML = `<div style="font-size:13px;color:#aaa;text-align:center;padding:8px">
+      此局為舊存檔，無單字記錄</div>`;
+    return;
+  }
+
+  const level = h.level || 1;
+  const d = new Date(h.date).toLocaleDateString('zh-TW', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
+  const sessNum = hi + 1;
+
+  const wordRows = words.map(id => {
+    const w = ALL_WORDS[id];
+    if (!w) return '';
+    const isWrong = wrongSet.has(id);
+    const icon  = isWrong ? '❌' : '✅';
+    const color = isWrong ? '#c62828' : '#2E7D32';
+    const bg    = isWrong ? '#FFEBEE' : '#E8F5E9';
+    return `<div style="display:flex;align-items:center;gap:6px;background:${bg};
+                        border-radius:8px;padding:5px 8px;margin-bottom:4px">
+      <span style="font-size:18px">${w.emoji||''}</span>
+      <span style="font-weight:900;font-size:14px;color:${color};flex:1">${w.english}</span>
+      <span style="font-size:13px;color:#555">${w.chinese}</span>
+      <span style="font-size:15px">${icon}</span>
+    </div>`;
+  }).join('');
+
+  const wrongCount = words.filter(id => wrongSet.has(id)).length;
+  const safeId = JSON.stringify(p.id);
+  const safeWords = JSON.stringify(words);
+
+  container.innerHTML = `
+    <div style="background:white;border:1.5px solid #ddd;border-radius:12px;padding:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:900;color:#333">
+          第 ${sessNum} 局 · Lv${level} · ${d}
+        </div>
+        <div style="font-size:12px;color:${wrongCount>0?'#c62828':'#2E7D32'}">
+          ${wrongCount > 0 ? `❌ 錯 ${wrongCount} 字` : '✅ 全部答對！'}
+        </div>
+      </div>
+      <div style="max-height:180px;overflow-y:auto;margin-bottom:10px">${wordRows}</div>
+      <button onclick='startReviewSession(${safeWords}, ${level}, ${safeId})'
+        style="width:100%;padding:10px;background:#FF6B35;color:white;border:none;
+               border-radius:10px;font-size:15px;font-weight:900;font-family:inherit;cursor:pointer">
+        📖 複習這一局（${words.length} 個單字）
+      </button>
+    </div>`;
+}
+
 function showParentDashboard() {
   const players = [...(gameState.progress.players || [])].sort((a,b) => (b.lastPlayed||0)-(a.lastPlayed||0));
   const totalWords = ALL_WORD_IDS.length;
@@ -4610,10 +4743,11 @@ function showParentDashboard() {
   if (players.length === 0) {
     playersHtml = '<div style="color:#aaa;font-size:15px;text-align:center;padding:16px">還沒有冒險者資料</div>';
   } else {
-    playersHtml = players.map(p => {
+    // 把 players 存入全域，供 pmShowSession 使用
+    window._pmPlayers = players;
+    playersHtml = players.map((p, pi) => {
       const ce       = CHARACTER_EMOJIS[p.character] || '🐧';
       const done     = (p.learnedWordIds||[]).length;
-      const wrong    = (p.wrongWordIds||[]).length;
       const sess     = p.sessionsCompleted || 0;
       const pct      = Math.round(done / totalWords * 100);
       const unlocked = p.unlockedLevels || [1];
@@ -4621,19 +4755,17 @@ function showParentDashboard() {
       const lastDate = p.lastPlayed
         ? new Date(p.lastPlayed).toLocaleDateString('zh-TW', {year:'numeric',month:'numeric',day:'numeric'})
         : '未記錄';
-      const history  = (p.sessionHistory || []).slice(-5).reverse();
-      const histHtml = history.length > 0
-        ? history.map(h => {
-            const d = new Date(h.date).toLocaleDateString('zh-TW', {month:'numeric',day:'numeric'});
-            return `<span style="background:white;border-radius:8px;padding:2px 8px;font-size:12px;
-              margin:2px;display:inline-block;border:1px solid #ddd">
-              Lv${h.level} 過關 · ${d} · 🔨×${h.hammers}
-            </span>`;
-          }).join('')
-        : '<span style="font-size:12px;color:#aaa">尚無完成紀錄</span>';
-      const wrongTags = (p.wrongWordIds||[]).map(id => ALL_WORDS[id]
-        ? `<span style="background:#FFF9C4;border-radius:8px;padding:1px 7px;font-size:13px;
-                        margin:2px;display:inline-block">${ALL_WORDS[id].english}</span>` : '').join('');
+      const history = (p.sessionHistory || []);
+      // 下拉選單選項（最新在前）
+      const opts = history.length === 0
+        ? '<option value="">尚無完成紀錄</option>'
+        : ['<option value="">— 選擇關卡 —</option>',
+            ...history.map((h, hi) => {
+              const d = new Date(h.date).toLocaleDateString('zh-TW', {month:'numeric', day:'numeric'});
+              const hasWords = (h.words||[]).length > 0;
+              return `<option value="${history.length - 1 - hi}">第 ${history.length - hi} 局 · Lv${h.level} · ${d}${hasWords ? '' : ' (舊存檔)'}</option>`;
+            }).reverse()
+          ].join('');
       return `<div style="background:#F8F9FA;border-radius:16px;padding:12px;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
           <span style="font-size:32px">${ce}</span>
@@ -4650,15 +4782,16 @@ function showParentDashboard() {
                    padding:5px 10px;font-size:13px;font-weight:900;font-family:inherit;
                    cursor:pointer;flex-shrink:0">🗑️ 刪除</button>
         </div>
-        <div style="background:#e8f5e9;border-radius:8px;height:8px;margin-bottom:8px">
+        <div style="background:#e8f5e9;border-radius:8px;height:8px;margin-bottom:10px">
           <div style="background:#4CAF50;height:100%;border-radius:8px;width:${pct}%;transition:width 0.5s"></div>
         </div>
-        <div style="font-size:12px;color:#888;font-weight:700;margin-bottom:4px">📋 近期紀錄：</div>
-        <div style="line-height:2;margin-bottom:6px">${histHtml}</div>
-        ${wrong > 0
-          ? `<div style="font-size:12px;color:#888;font-weight:700;margin-bottom:4px">需加強（${wrong} 字）：</div>
-             <div style="line-height:2">${wrongTags}</div>`
-          : '<div style="font-size:12px;color:#2E7D32">✅ 沒有錯誤單字！太棒了！</div>'}
+        <div style="font-size:13px;font-weight:900;color:#333;margin-bottom:6px">📚 關卡學習紀錄</div>
+        <select onchange="pmShowSession(${pi}, this.value)"
+          style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:10px;
+                 font-size:14px;font-family:inherit;background:white;margin-bottom:8px">
+          ${opts}
+        </select>
+        <div id="pm-session-${pi}" style="margin-bottom:4px"></div>
       </div>`;
     }).join('');
   }
