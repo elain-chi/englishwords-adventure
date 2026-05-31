@@ -357,8 +357,13 @@
   .cell-rest      { background:#E1BEE7; border-color:#CE93D8; }
   .cell-joke      { background:#FFF3E0; border-color:#FFAB40; }
   .cell-fortune   { background:#EDE7F6; border-color:#9575CD; }
+  .cell-drawing   { background:#FFF9C4; border-color:#F9A825; }
+  .cell-tictactoe { background:#E8F5E9; border-color:#66BB6A; }
   .cell-empty     { background:#F5F5F5; border-color:#E0E0E0; }
   .cell-learning  { background: linear-gradient(135deg,#FFD93D,#FF8C42); border-color:#E65100; }
+  @keyframes drawPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.2)} }
+  .draw-color-swatch { width:28px;height:28px;border-radius:50%;cursor:pointer;border:3px solid transparent;box-sizing:border-box;flex-shrink:0; }
+  .draw-color-swatch.active { border-color:#333 !important; }
 
   /* ===== CELL EVENT OVERLAY ===== */
   .cell-event-overlay {
@@ -1768,9 +1773,13 @@ function startGame() {
   gameState.session.mapCells = buildMapCells();
   // 預先平均分配幸運格獎勵（避免全部抽到同一種）
   const luckyCount = gameState.session.mapCells.filter(c => c.type === 'lucky').length;
-  const luckyBase = [];
-  for (let i = 0; i < luckyCount; i++) luckyBase.push(i % 3); // 0=🍀 1=🔨 2=🎲 循環
-  gameState.session.luckyQueue = shuffleArray(luckyBase);
+  // 6 種獎勵，前 5 種各權重 3，飯糰權重 1（機率約 1/3）
+  // 0=前進 1=槌子 2=骰子×2 3=幸運色 4=唱歌 5=飯糰
+  const luckyWeighted = [
+    ...Array(3).fill(0),...Array(3).fill(1),...Array(3).fill(2),
+    ...Array(3).fill(3),...Array(3).fill(4),...Array(1).fill(5)
+  ];
+  gameState.session.luckyQueue = shuffleArray(luckyWeighted);
   gameState.session.luckyQueueIdx = 0;
   startLearningPhase(0);
   startGameTimer();
@@ -2251,21 +2260,64 @@ function quizComplete() {
 const CELL_ICONS = {
   review:'🔁', lucky:'⭐', challenge:'💀',
   teleport:'🌈', rest:'🏃', empty:'⬜', learning:'📚',
-  joke:'😂', fortune:'🔮', boss:'👹'
+  joke:'😂', fortune:'🔮', boss:'👹', drawing:'🎨', tictactoe:'⭕'
 };
 
 function buildMapCells() {
   // 37 random cells (positions 1-40, skipping fixed checkpoints 10/20/30)
   const pool = [
     ...Array(9).fill('review'),
-    ...Array(5).fill('lucky'),
     ...Array(9).fill('challenge'),
-    ...Array(4).fill('teleport'),
+    ...Array(2).fill('lucky'),
+    ...Array(2).fill('teleport'),
     ...Array(4).fill('rest'),
+    ...Array(2).fill('fortune'),
     ...Array(2).fill('joke'),
-    ...Array(3).fill('fortune'),
+    ...Array(3).fill('tictactoe'),
+    ...Array(3).fill('drawing'),
   ]; // total 36（40 格 - 3 學習格 - 1 boss 格）
-  const deck = shuffleArray(pool);
+
+  // 不連續洗牌：同類型不相鄰
+  const deck = (function noConsecutiveShuffle(arr) {
+    const counts = {};
+    arr.forEach(t => counts[t] = (counts[t]||0)+1);
+    const result = [];
+    let last = null;
+    while (result.length < arr.length) {
+      const remaining = arr.length - result.length;
+      let avail = Object.keys(counts).filter(t => counts[t]>0 && t!==last);
+      if (!avail.length) avail = Object.keys(counts).filter(t=>counts[t]>0);
+      if (!avail.length) break;
+      // 若某類型剩餘數量過多，強制優先放（避免最後卡死）
+      let pick = null;
+      for (const t of avail) {
+        if (counts[t] > (remaining - 1) / 2) { pick = t; break; }
+      }
+      if (!pick) {
+        const tot = avail.reduce((s,t)=>s+counts[t],0);
+        let r = Math.random()*tot;
+        pick = avail[avail.length-1];
+        for (const t of avail) { r-=counts[t]; if(r<=0){pick=t;break;} }
+      }
+      result.push(pick); counts[pick]--; last=pick;
+    }
+    // 後處理：修補仍存在的連續相同格
+    for (let pass = 0; pass < 5; pass++) {
+      let fixed = false;
+      for (let i = 0; i < result.length - 1; i++) {
+        if (result[i] === result[i+1]) {
+          for (let j = i+2; j < result.length; j++) {
+            if (result[j] !== result[i] && (j+1 >= result.length || result[j+1] !== result[i+1])) {
+              [result[i+1], result[j]] = [result[j], result[i+1]];
+              fixed = true; break;
+            }
+          }
+        }
+      }
+      if (!fixed) break;
+    }
+    return result;
+  })(pool);
   let di = 0;
   const cells = [];
   for (let pos = 1; pos <= 40; pos++) {
@@ -2677,6 +2729,8 @@ function triggerCellEvent(pos) {
     case 'rest':      triggerRest();      break;
     case 'joke':      triggerJoke();      break;
     case 'fortune':   triggerFortune();   break;
+    case 'drawing':   triggerDrawing();   break;
+    case 'tictactoe': triggerTicTacToe(); break;
     default:
       resEl.textContent = '⬜ 平安通過！繼續加油！';
       hintEl.textContent = '再擲一次吧！';
@@ -2819,17 +2873,20 @@ function reviewFeedAndContinue() {
 // ── ⭐ 幸運格 ────────────────────────────────────────────
 function triggerLucky() {
   const prizes = [
-    { id:'forward', icon:'🍀', text:'前進 +2 格！',     desc:'幸運草帶你往前走！' },
-    { id:'hammer',  icon:'🔨', text:'獲得 1 個槌子！',   desc:'太棒了，新槌子！' },
-    { id:'double',  icon:'🎲', text:'下一次骰子 ×2！',   desc:'下次投骰加倍！' },
+    { id:'forward',  icon:'🍀', text:'前進 +2 格！',             desc:'幸運草帶你往前走！' },
+    { id:'hammer',   icon:'🔨', text:'獲得 1 個槌子！',           desc:'太棒了，新槌子！' },
+    { id:'double',   icon:'🎲', text:'下一次骰子 ×2！',           desc:'下次投骰加倍！' },
+    { id:'color',    icon:'🌟', text:'今日幸運色是金色！',         desc:'金色保佑你今天順順利利！' },
+    { id:'song',     icon:'🎵', text:'唱一首歌給身邊的人聽！',     desc:'用歌聲把快樂傳遞給大家！' },
+    { id:'onigiri',  icon:'🍙', text:'獲得一顆飯糰！',             desc:'快去餵給你的動物夥伴！' },
   ];
-  // 從預先平均洗牌的佇列取獎勵，避免同一局全抽到同一種
   const q = gameState.session.luckyQueue || [];
   const qi = gameState.session.luckyQueueIdx || 0;
-  const prizeIdx = q.length > 0 ? q[qi % q.length] : Math.floor(Math.random() * 3);
+  const prizeIdx = q.length > 0 ? q[qi % q.length] : Math.floor(Math.random() * 5);
   gameState.session.luckyQueueIdx = qi + 1;
   const prize = prizes[prizeIdx];
   let revealed = false;
+
   showEventOverlay(`
     <span class="event-icon">⭐</span>
     <div class="event-title">幸運格！</div>
@@ -2847,19 +2904,91 @@ function triggerLucky() {
       if (i === idx) { c.textContent = prize.icon; c.classList.add('revealed'); }
       else           { c.textContent = '❓';       c.classList.add('dim'); }
     });
-    let extra = '';
+
     if (prize.id === 'forward') {
       document.getElementById('lucky-result').innerHTML =
         `<div class="event-result-banner good">${prize.icon} ${prize.text}<br><small style="font-weight:700">${prize.desc}</small></div>
          <button class="btn btn-primary" style="margin-top:12px" onclick="walkSteps(2)">出發！🍀</button>`;
       return;
-    } else if (prize.id === 'hammer') {
+    }
+
+    if (prize.id === 'hammer') {
       gameState.session.hammerCount++;
       if (gameState.session.hammerCount >= 10) gameState.session.pendingForgeOffer = true;
       updateHUD(); spawnStars(); playSound('hammer');
+
     } else if (prize.id === 'double') {
       gameState.session.doubleNextRoll = true;
+
+    } else if (prize.id === 'color') {
+      // 幸運色：金色裝飾畫面
+      showEventOverlay(`
+        <div style="font-size:64px;animation:bounceIn 0.4s ease-out">✨</div>
+        <div style="font-size:22px;font-weight:900;color:#F9A825;margin:8px 0">今日幸運色是金色！</div>
+        <div style="font-size:40px;letter-spacing:4px;margin:4px 0">🌟⭐🌟</div>
+        <div style="font-size:14px;color:#888;margin:8px 0 16px">金色保佑你今天順順利利！</div>
+        <button class="btn btn-primary" onclick="hideEventOverlay()">謝謝幸運色！</button>`);
+      return;
+
+    } else if (prize.id === 'song') {
+      // 唱歌：邀請玩家唱一首歌
+      showEventOverlay(`
+        <div style="font-size:64px;animation:bounceIn 0.4s ease-out">🎵</div>
+        <div style="font-size:22px;font-weight:900;color:#7B1FA2;margin:8px 0">唱一首歌！</div>
+        <div style="font-size:15px;color:#555;margin:4px 0 8px">把快樂用歌聲傳給身邊的人 🎶</div>
+        <div style="font-size:13px;color:#aaa;margin-bottom:16px">唱完才能繼續冒險喔！</div>
+        <button class="btn btn-primary" onclick="hideEventOverlay()">🎤 唱完了！繼續冒險</button>`);
+      return;
+
+    } else if (prize.id === 'onigiri') {
+      // 飯糰：立即餵寵物
+      const charEmoji = getAnimalEmoji();
+      gameState.session.onigiriCount = (gameState.session.onigiriCount || 0) + 1;
+      updateHUD();
+      showEventOverlay(`
+        <div style="text-align:center;padding:4px 0">
+          <div style="font-size:22px;font-weight:900;color:#2E7D32;margin-bottom:10px">🍙 獲得一顆飯糰！</div>
+          <span id="lucky-animal" style="font-size:72px;display:block;animation:bounceIn 0.4s ease-out both">${charEmoji}</span>
+          <span id="lucky-onigiri" style="font-size:56px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍙</span>
+          <div style="font-size:14px;color:#888;margin:8px 0 16px">現有 ${gameState.session.onigiriCount} 顆</div>
+          <button class="btn btn-green" id="lucky-feed-btn" onclick="luckyFeedOnigiri()" style="width:100%">🍙 餵飯糰！</button>
+        </div>`);
+      window.luckyFeedOnigiri = function() {
+        const btn = document.getElementById('lucky-feed-btn');
+        if (btn) btn.disabled = true;
+        const onigiriEl = document.getElementById('lucky-onigiri');
+        const animalEl  = document.getElementById('lucky-animal');
+        if (onigiriEl) onigiriEl.style.animation = 'onigiriFlying 0.7s ease-in forwards';
+        setTimeout(() => {
+          if (animalEl) animalEl.style.animation = 'animalMunch 0.5s ease-in-out';
+          playSound('correct');
+        }, 600);
+        setTimeout(() => {
+          const prevLevel = getAnimalLevel();
+          gameState.session.animalFed = (gameState.session.animalFed || 0) + 1;
+          gameState.session.onigiriCount = Math.max(0, (gameState.session.onigiriCount || 0) - 1);
+          updateHUD();
+          const newLevel = getAnimalLevel();
+          if (newLevel > prevLevel) {
+            playSound('hammer'); spawnStars();
+            const isStar = newLevel >= 4, isMax = newLevel >= 8, stars = isStar ? newLevel - 3 : 0;
+            const petEmoji = getAnimalEmoji();
+            const lvlIcon = isStar
+              ? `<span style="font-size:72px;display:block;animation:bounceIn 0.5s ease-out both">${petEmoji}</span>
+                 <div style="font-size:${stars>=4?'26px':'32px'};letter-spacing:4px;animation:bounceIn 0.6s 0.1s ease-out both">${'⭐'.repeat(stars)}</div>`
+              : `<span class="event-icon" style="font-size:76px;animation:bounceIn 0.5s ease-out both">${petEmoji}</span>`;
+            showEventOverlay(`
+              <div style="text-align:center">${lvlIcon}</div>
+              <div class="event-title" style="color:#FF6B35">🎉 ${isMax ? '五星傳說達成！！' : isStar ? `${stars}星傳說！` : '夥伴升級了！！'}</div>
+              <div style="font-size:20px;font-weight:900;margin:8px 0">${ANIMAL_LEVEL_NAMES[newLevel]}</div>
+              <div style="font-size:14px;color:#888">${isMax ? '已達最高等級！太棒了！' : '繼續加油！'}</div>`);
+            setTimeout(hideEventOverlay, 2500);
+          } else { hideEventOverlay(); }
+        }, 1100);
+      };
+      return;
     }
+
     document.getElementById('lucky-result').innerHTML =
       `<div class="event-result-banner good">${prize.icon} ${prize.text}<br><small style="font-weight:700">${prize.desc}</small></div>
        <button class="btn btn-primary" style="margin-top:12px" onclick="hideEventOverlay()">繼續冒險！</button>`;
@@ -3340,6 +3469,408 @@ function feedAnimal() {
   } else {
     showAnimalOverlay();
   }
+}
+
+// ── ⭕ 圈圈叉叉格 ─────────────────────────────────────────
+
+function triggerTicTacToe() {
+  let board = Array(9).fill(null); // null / 'O'(玩家) / 'X'(電腦)
+  let gameOver = false;
+
+  const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+
+  // ── 音效 ──
+  const _sndO = () => {
+    try {
+      const ctx = getAudioCtx(); if (ctx.state==='suspended') ctx.resume();
+      const t = ctx.currentTime;
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = 'sine';
+      o.frequency.setValueAtTime(900, t);
+      o.frequency.exponentialRampToValueAtTime(1200, t+0.07);
+      g.gain.setValueAtTime(0.35, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t+0.12);
+      o.start(t); o.stop(t+0.12);
+    } catch(e) {}
+  };
+  const _sndX = () => {
+    try {
+      const ctx = getAudioCtx(); if (ctx.state==='suspended') ctx.resume();
+      const t = ctx.currentTime;
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(450, t);
+      o.frequency.exponentialRampToValueAtTime(280, t+0.1);
+      g.gain.setValueAtTime(0.3, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t+0.13);
+      o.start(t); o.stop(t+0.13);
+    } catch(e) {}
+  };
+
+  // ── 棋盤邏輯 ──
+  const checkWinner = b => {
+    for (const [a,c,d] of LINES) {
+      if (b[a] && b[a]===b[c] && b[a]===b[d]) return b[a];
+    }
+    return b.every(x=>x) ? 'draw' : null;
+  };
+
+  const bestMove = b => {
+    const empty = b.map((v,i)=>v?null:i).filter(i=>i!==null);
+    for (const [a,c,d] of LINES) {
+      if (b[a]==='X'&&b[c]==='X'&&b[d]==null) return d;
+      if (b[a]==='X'&&b[d]==='X'&&b[c]==null) return c;
+      if (b[c]==='X'&&b[d]==='X'&&b[a]==null) return a;
+    }
+    for (const [a,c,d] of LINES) {
+      if (b[a]==='O'&&b[c]==='O'&&b[d]==null) return d;
+      if (b[a]==='O'&&b[d]==='O'&&b[c]==null) return c;
+      if (b[c]==='O'&&b[d]==='O'&&b[a]==null) return a;
+    }
+    if (b[4]==null) return 4;
+    return empty[Math.floor(Math.random()*empty.length)];
+  };
+
+  // AI：40% 最佳，60% 隨機 → 玩家贏率約 60%
+  const aiMove = b => {
+    const empty = b.map((v,i)=>v?null:i).filter(i=>i!==null);
+    if (!empty.length) return null;
+    return Math.random() < 0.4 ? bestMove(b) : empty[Math.floor(Math.random()*empty.length)];
+  };
+
+  const cellBorder = i => [
+    'border-right:3px solid #555;border-bottom:3px solid #555',
+    'border-right:3px solid #555;border-bottom:3px solid #555',
+    'border-bottom:3px solid #555',
+    'border-right:3px solid #555;border-bottom:3px solid #555',
+    'border-right:3px solid #555;border-bottom:3px solid #555',
+    'border-bottom:3px solid #555',
+    'border-right:3px solid #555',
+    'border-right:3px solid #555',
+    ''
+  ][i];
+
+  const renderBoard = () => {
+    const grid = document.getElementById('ttt-grid');
+    if (!grid) return;
+    grid.innerHTML = board.map((cell, i) => {
+      const sym = cell==='O'
+        ? `<span style="font-size:40px;color:#e53935;line-height:1">⭕</span>`
+        : cell==='X'
+        ? `<span style="font-size:40px;color:#1E88E5;line-height:1">❌</span>`
+        : '';
+      const canClick = !cell && !gameOver;
+      return `<div onclick="${canClick?`window._tttClick(${i})`:''}"
+        style="width:88px;height:88px;display:flex;align-items:center;justify-content:center;
+               ${cellBorder(i)};cursor:${canClick?'pointer':'default'};
+               background:${canClick?'#fafafa':'#f0f0f0'};transition:background 0.1s;border-radius:0">
+        ${sym}
+      </div>`;
+    }).join('');
+  };
+
+  showEventOverlay(`
+    <div style="text-align:center;padding:0 4px">
+      <div style="font-size:22px;font-weight:900;color:#2e7d32;margin-bottom:2px">⭕ 圈圈叉叉 ❌</div>
+      <div style="font-size:13px;color:#888;margin-bottom:10px">你是 ⭕，先手出擊！</div>
+      <div id="ttt-grid" style="display:grid;grid-template-columns:repeat(3,88px);gap:0;
+           justify-content:center;border:3px solid #555;border-radius:10px;overflow:hidden;
+           margin:0 auto 12px;width:264px"></div>
+      <div id="ttt-msg" style="font-size:15px;color:#555;min-height:22px;margin-bottom:4px"></div>
+    </div>`);
+
+  renderBoard();
+
+  const endGame = result => {
+    gameOver = true;
+    renderBoard();
+    if (result === 'O') {
+      setTimeout(() => {
+        showEventOverlay(`
+          <span style="font-size:72px">😊</span>
+          <div style="font-size:24px;font-weight:900;color:#e65100;margin:10px 0">你贏了！</div>
+          <div style="font-size:15px;color:#555;margin-bottom:16px">送你一個微笑，開心一整天 😊</div>
+          <button class="btn btn-primary" onclick="hideEventOverlay();goToMap()">繼續冒險</button>`);
+      }, 900);
+    } else if (result === 'X') {
+      setTimeout(() => {
+        showEventOverlay(`
+          <span style="font-size:72px">💪</span>
+          <div style="font-size:24px;font-weight:900;color:#555;margin:10px 0">電腦贏了！</div>
+          <div style="font-size:15px;color:#555;margin-bottom:16px">不要氣餒，再接再厲！</div>
+          <button class="btn btn-primary" onclick="hideEventOverlay();goToMap()">繼續冒險</button>`);
+      }, 900);
+    } else {
+      setTimeout(() => {
+        showEventOverlay(`
+          <span style="font-size:72px">🤝</span>
+          <div style="font-size:24px;font-weight:900;color:#555;margin:10px 0">平手！</div>
+          <div style="font-size:15px;color:#555;margin-bottom:16px">勢均力敵！再來一局！</div>
+          <button class="btn btn-primary" onclick="hideEventOverlay();goToMap()">繼續冒險</button>`);
+      }, 900);
+    }
+  };
+
+  window._tttClick = function(idx) {
+    if (board[idx] || gameOver) return;
+    board[idx] = 'O';
+    _sndO();
+    renderBoard();
+    const w1 = checkWinner(board);
+    if (w1) { endGame(w1); return; }
+    const msg = document.getElementById('ttt-msg');
+    if (msg) msg.textContent = '電腦思考中...';
+    setTimeout(() => {
+      const ai = aiMove(board);
+      if (ai !== null && ai !== undefined) {
+        board[ai] = 'X';
+        _sndX();
+        renderBoard();
+        const w2 = checkWinner(board);
+        if (msg) msg.textContent = '';
+        if (w2) endGame(w2);
+      }
+    }, 500);
+  };
+}
+
+// ── 🎨 繪圖格 ────────────────────────────────────────────
+
+function _getDrawableWord() {
+  const profile = (gameState.progress.players || []).find(p => p.id === gameState.player.profileId);
+  const learnedIds = new Set(profile ? (profile.learnedWordIds || []) : []);
+  const drawablePfx = ['_AN_','_FD_','_NT_','_TR_','_TH_','_BD_','_S1_','_PL_'];
+  const candidates = [];
+  Object.values(SCENES).forEach(s => (s.words||[]).forEach(w => {
+    if (learnedIds.has(w.id) && drawablePfx.some(p => w.id.includes(p))) candidates.push(w);
+  }));
+  if (candidates.length === 0) {
+    // 還沒學夠單字時，用固定題庫：Cat、Dog、Rabbit
+    const fallbacks = [
+      { id:'FALLBACK_cat',   english:'cat',    chinese:'貓',   emoji:'🐱', sentences:[{en:'I see a cat.',zh:'我看到一隻貓。'}] },
+      { id:'FALLBACK_dog',   english:'dog',    chinese:'狗',   emoji:'🐶', sentences:[{en:'The dog runs.',zh:'小狗在跑。'}] },
+      { id:'FALLBACK_rabbit',english:'rabbit', chinese:'兔子', emoji:'🐰', sentences:[{en:'The rabbit hops.',zh:'兔子在跳。'}] },
+    ];
+    return shuffleArray(fallbacks)[0];
+  }
+  return shuffleArray(candidates)[0];
+}
+
+function triggerDrawing() {
+  const word = _getDrawableWord();
+  if (!word) {
+    showEventOverlay(`
+      <span style="font-size:60px">🎨</span>
+      <div style="font-size:20px;font-weight:900;color:#F9A825;margin:8px 0">繪圖格</div>
+      <div style="color:#666;margin-bottom:16px">還沒有可以畫的單字，繼續學習吧！</div>
+      <button class="btn btn-primary" onclick="hideEventOverlay();goToMap()">繼續冒險</button>`);
+    return;
+  }
+
+  let _drawTimer = 100, _drawInterval = null, _done = false;
+  let _color = '#222222', _isEraser = false, _drawing = false;
+
+  const COLORS = ['#222222','#e53935','#1E88E5','#43A047','#FB8C00','#8E24AA'];
+  const colorSwatches = COLORS.map((c,i) =>
+    `<div id="dcs-${i}" class="draw-color-swatch" style="background:${c};border-color:${i===0?'#333':'transparent'}" onclick="window._dColor('${c}',${i})"></div>`
+  ).join('');
+
+  showEventOverlay(`
+    <div style="text-align:center;padding:0 2px">
+      <div style="margin-bottom:4px">
+        <div style="font-size:13px;color:#aaa;margin-bottom:1px">Please draw a</div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:6px">
+          <span style="font-size:32px;font-weight:900;color:#E65100">a ${word.english}</span>
+          <span style="font-size:26px">${word.emoji}</span>
+          <button onclick="window._dSpeak()" style="background:none;border:none;font-size:18px;cursor:pointer;padding:0">🔊</button>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <div id="draw-t-num" style="font-size:20px;font-weight:900;color:#333;min-width:36px;text-align:right">100</div>
+        <div style="flex:1;background:#eee;border-radius:4px;height:7px;overflow:hidden">
+          <div id="draw-t-bar" style="background:#4CAF50;height:100%;width:100%;border-radius:4px;transition:width 1s linear"></div>
+        </div>
+      </div>
+      <canvas id="draw-canvas" width="320" height="340"
+        style="border:2px solid #ddd;border-radius:10px;background:white;touch-action:none;cursor:crosshair;display:block;margin:0 auto 6px;width:100%;max-width:100%"></canvas>
+      <div style="display:flex;gap:6px;justify-content:center;align-items:center;margin-bottom:6px">
+        ${colorSwatches}
+        <div class="draw-color-swatch" id="dcs-eraser" style="background:white;border-color:#ccc;font-size:14px;display:flex;align-items:center;justify-content:center" onclick="window._dEraser()">🧹</div>
+        <div class="draw-color-swatch" style="background:white;border-color:#ccc;font-size:16px;display:flex;align-items:center;justify-content:center" onclick="window._dClear()">🗑</div>
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="window._dDone()">✅ 完成！</button>
+    </div>`);
+
+  // 拉大 modal 到 80% 螢幕高度
+  const _modal = document.getElementById('event-modal');
+  if (_modal) { _modal.style.maxHeight = '82vh'; _modal.style.overflowY = 'auto'; _modal.style.padding = '14px 14px'; }
+
+  // Canvas setup
+  const canvas = document.getElementById('draw-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+  function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const sx = canvas.width / rect.width, sy = canvas.height / rect.height;
+    const src = e.touches ? e.touches[0] : e;
+    return { x:(src.clientX - rect.left)*sx, y:(src.clientY - rect.top)*sy };
+  }
+  function onStart(e) { e.preventDefault(); _drawing=true; const p=getPos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); }
+  function onMove(e)  {
+    e.preventDefault(); if (!_drawing) return;
+    const p = getPos(e);
+    ctx.strokeStyle = _isEraser ? '#ffffff' : _color;
+    ctx.lineWidth   = _isEraser ? 22 : 4;
+    ctx.lineTo(p.x,p.y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(p.x,p.y);
+  }
+  function onEnd(e)   { e.preventDefault(); _drawing=false; }
+  canvas.addEventListener('touchstart', onStart, {passive:false});
+  canvas.addEventListener('touchmove',  onMove,  {passive:false});
+  canvas.addEventListener('touchend',   onEnd,   {passive:false});
+  canvas.addEventListener('mousedown',  onStart);
+  canvas.addEventListener('mousemove',  onMove);
+  canvas.addEventListener('mouseup',    onEnd);
+  canvas.addEventListener('mouseleave', onEnd);
+
+  // Global helpers
+  window._dColor = function(c, idx) {
+    _color=c; _isEraser=false;
+    COLORS.forEach((_,i) => { const el=document.getElementById('dcs-'+i); if(el) el.style.borderColor=i===idx?'#333':'transparent'; });
+    const er=document.getElementById('dcs-eraser'); if(er) er.style.borderColor='#ccc';
+  };
+  window._dEraser = function() {
+    _isEraser=true;
+    COLORS.forEach((_,i) => { const el=document.getElementById('dcs-'+i); if(el) el.style.borderColor='transparent'; });
+    const er=document.getElementById('dcs-eraser'); if(er) er.style.borderColor='#333';
+  };
+  window._dClear = function() { ctx.clearRect(0,0,canvas.width,canvas.height); };
+  window._dSpeak = function() {
+    if (window.speechSynthesis) {
+      const u = new SpeechSynthesisUtterance('Draw a ' + word.english);
+      u.lang='en-US'; u.rate=0.85;
+      window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+    }
+  };
+
+  // Timer
+  function updateTimer() {
+    const n=document.getElementById('draw-t-num'), b=document.getElementById('draw-t-bar');
+    if(!n) return;
+    n.textContent = _drawTimer;
+    if (_drawTimer <= 10) { n.style.color='#e53935'; n.style.animation='drawPulse 0.5s infinite'; }
+    else if (_drawTimer <= 30) { n.style.color='#FB8C00'; }
+    if (b) {
+      b.style.width = (_drawTimer/100*100)+'%';
+      b.style.background = _drawTimer<=10?'#e53935':_drawTimer<=30?'#FB8C00':'#4CAF50';
+    }
+  }
+  _drawInterval = setInterval(() => {
+    if (_done) return;
+    _drawTimer--;
+    updateTimer();
+    if (_drawTimer <= 0) { clearInterval(_drawInterval); window._dDone(); }
+  }, 1000);
+
+  window._dDone = function() {
+    if (_done) return; _done=true;
+    clearInterval(_drawInterval);
+    const dataURL = canvas.toDataURL();
+    _proceedDrawingGuess(word, dataURL);
+  };
+}
+
+function _proceedDrawingGuess(word, dataURL) {
+  const allWords = [];
+  Object.values(SCENES).forEach(s => (s.words||[]).forEach(w => {
+    if (w.id !== word.id) allWords.push(w);
+  }));
+  const wrongs = shuffleArray(allWords).slice(0, 2);
+  const options = shuffleArray([word, ...wrongs]);
+
+  showEventOverlay(`
+    <div style="text-align:center">
+      <div style="font-size:20px;font-weight:900;color:#E65100;margin-bottom:8px">🖼 猜猜我畫什麼？</div>
+      <img src="${dataURL}" style="width:180px;height:154px;border:2px solid #ddd;border-radius:10px;background:white;object-fit:contain;margin-bottom:12px;display:block;margin-left:auto;margin-right:auto">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${options.map(o => `
+          <button class="btn" style="font-size:18px;font-weight:900;background:#f5f5f5;color:#333;border:2px solid #ddd;padding:10px"
+            onclick="window._dGuess('${o.id}','${word.id}')">
+            ${o.english}
+          </button>`).join('')}
+      </div>
+    </div>`);
+
+  window._dGuess = function(sel, correct) {
+    window._dGuess = null;
+    if (sel === correct) {
+      _showDrawingSuccess(word);
+    } else {
+      showEventOverlay(`
+        <span style="font-size:64px">😢</span>
+        <div style="font-size:22px;font-weight:900;color:#E65100;margin:8px 0">好可惜！</div>
+        <div style="font-size:16px;color:#555;margin-bottom:4px">答案不是我～</div>
+        <div style="font-size:15px;color:#333;margin-bottom:16px">正確答案是 ${word.emoji} <b>${word.english}</b>（${word.chinese}）</div>
+        <button class="btn btn-primary" onclick="hideEventOverlay();goToMap()">繼續冒險</button>`);
+    }
+  };
+}
+
+function _showDrawingSuccess(word) {
+  const charEmoji = getAnimalEmoji();
+  const fruits = ['🍇','🍓','🍊'];
+  const fruit = fruits[Math.floor(Math.random() * fruits.length)];
+  showEventOverlay(`
+    <span style="font-size:64px">${fruit}</span>
+    <div style="font-size:22px;font-weight:900;color:#E65100;margin:8px 0">答對了！🎉</div>
+    <div style="font-size:15px;color:#555;margin-bottom:4px">答案是 ${word.emoji} <b>${word.english}</b>（${word.chinese}）</div>
+    <div style="font-size:14px;color:#888;margin-bottom:12px">得到健康水果！</div>
+    <div style="font-size:64px;margin-bottom:8px">${charEmoji}</div>
+    <button class="btn btn-primary" style="width:100%" onclick="window._dFeedFruit('${fruit}')">餵水果</button>`);
+
+  window._dFeedFruit = function(f) {
+    window._dFeedFruit = null;
+    gameState.session.animalFed = (gameState.session.animalFed || 0) + 1;
+    _drawPetSing(f);
+  };
+}
+
+function _drawPetSing(fruit) {
+  fruit = fruit || '🍎';
+  const charEmoji = getAnimalEmoji();
+  showEventOverlay(`
+    <div style="font-size:72px;animation:bounceIn 0.4s ease-out">${charEmoji}</div>
+    <div style="font-size:13px;color:#888;margin:8px 0 10px">寵物好開心，唱歌給你聽！</div>
+    <div class="rest-lyrics" id="sing-lyrics"></div>
+    <button id="sing-done-btn" class="btn btn-primary" style="display:none;width:100%;margin-top:14px" onclick="hideEventOverlay();goToMap()">繼續冒險</button>`);
+
+  // 歡樂旋律
+  const notes = [
+    [523,1],[659,1],[784,1],[659,1],
+    [523,1],[523,1],[784,2],
+    [880,1],[784,1],[659,1],[523,2]
+  ];
+  const dur = playMelody(notes, 150);
+
+  const lyrics = ['♪ 吃到水果好開心 ♪','♫ 謝謝你，謝謝你 ♫'];
+  lyrics.forEach((line, i) => {
+    setTimeout(() => {
+      const el = document.getElementById('sing-lyrics');
+      if (!el) return;
+      const d = document.createElement('div');
+      d.className = 'rest-lyric-line';
+      d.textContent = line;
+      el.appendChild(d);
+      setTimeout(() => d.classList.add('show'), 50);
+    }, i * 800);
+  });
+
+  setTimeout(() => {
+    const btn = document.getElementById('sing-done-btn');
+    if (btn) btn.style.display = 'block';
+  }, Math.max(dur + 200, 2800));
 }
 
 // ── 😴 休息格 ────────────────────────────────────────────
@@ -5555,18 +6086,20 @@ function showGameGuide() {
       <div style="background:#FFF9C4;border-radius:14px;padding:14px;margin-bottom:12px">
         <div style="font-size:15px;font-weight:900;color:#FF6B35;margin-bottom:6px">🎯 遊戲目標</div>
         <div style="font-size:14px;color:#333;line-height:1.7">
-          在 40 格地圖上擲骰前進，每 10 格學習 3 個英文單字，用你學會的單字武器打倒大魔王！
+          在 40 格地圖上擲骰前進，每 10 格學習 2 個英文單字，用你學會的單字武器打倒大魔王！
         </div>
       </div>
 
       <div style="font-size:15px;font-weight:900;color:#333;margin-bottom:8px">🗺️ 格子說明</div>
       ${[
-        ['📚','學習格','第 10、20、30 格固定出現，學習 3 個新單字並完成小測驗'],
+        ['📚','學習格','第 10、20、30 格固定出現，學習 2 個新單字並完成小測驗'],
         ['🔁','複習格','從已學過的單字出題，答對獲得一顆飯糰 🍙'],
-        ['⭐','幸運格','翻 3 張牌選 1 張：🍀 前進 2 格 ／ 🔨 得到槌子 ／ 🎲 下次骰子 ×2'],
+        ['⭐','幸運格','翻 3 張牌選 1 張：🍀 前進 2 格 ／ 🔨 得到槌子 ／ 🎲 骰子 ×2 ／ 🌟 幸運色金色 ／ 🎵 唱首歌 ／ 🍙 飯糰（低機率）'],
         ['💀','挑戰格','英文字母填空，答對通過，答錯退回前一格'],
         ['🌈','傳送格','隨機傳送到地圖上的另一個位置'],
         ['🏃','運動格','翻牌看運動任務，完成才能繼續（跳跳、深蹲、拍手等）'],
+        ['⭕','圈圈叉叉格','與電腦下圈圈叉叉，你先手！贏了送你一個微笑，開心一整天 😊'],
+        ['🎨','繪圖格','抽一個單字，限時畫出來！完成後猜圖，猜對得到健康水果 🍓'],
         ['😂','冷笑話格','分享一則超好笑的冷笑話，笑完繼續冒險'],
         ['🔮','今日運勢格','翻 1 張運勢牌，看看今天是大吉還是小凶！'],
         ['👑','大魔王','第 40 格！用學過的單字打 6 回合魔王對戰'],
@@ -5587,8 +6120,9 @@ function showGameGuide() {
       <div style="margin-top:8px;background:#E3F2FD;border-radius:14px;padding:12px">
         <div style="font-size:14px;font-weight:900;color:#1565C0;margin-bottom:6px">🍙 飯糰 × 動物養成</div>
         <div style="font-size:13px;color:#333;line-height:1.6">
-          複習格答對得到飯糰，餵給你的動物夥伴！<br>
-          每餵 3 顆升一級，共 5 個等級：🥚 → 🐣 → 🐥 → 🐧 → ⭐⭐⭐⭐⭐
+          複習格、繪圖格等答對即可得到飯糰，餵給你的動物夥伴！<br><br>
+          🥚 蛋蛋期（0顆）→ 小寶寶（3顆）→ 成長期（9顆）→ 成熟期（18顆）<br>
+          成熟後每 10 顆升一星 ⭐，最高 ⭐⭐⭐⭐⭐ 五星傳說！
         </div>
       </div>
 
