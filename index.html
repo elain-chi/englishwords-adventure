@@ -247,6 +247,7 @@
   }
   @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
   @keyframes fadeIn { from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
   @keyframes starFly {
     0%{transform:translate(0,0) scale(1);opacity:1}
     100%{transform:translate(var(--dx),var(--dy)) scale(0);opacity:0}
@@ -282,6 +283,7 @@
     flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 10;
   }
   .hud-player  { font-size: 20px; font-weight: 900; color: #333; flex: 1; }
+  .hud-axes    { font-size: 20px; font-weight: 900; color: #8B4513; }
   .hud-hammers { font-size: 20px; font-weight: 900; color: #FF6B35; }
   .hud-onigiri { font-size: clamp(20px,4.5vw,26px); font-weight: 900; color: #2E7D32; cursor: pointer; user-select: none; transition: transform 0.15s; }
   .hud-onigiri:active { transform: scale(1.25); }
@@ -440,10 +442,44 @@
     60% { transform: scale(1.3) rotate(5deg);  opacity:1; }
     100%{ transform: scale(1)   rotate(0); }
   }
+  @keyframes forgeHammer {
+    0%   { transform: scale(1) rotate(0deg); opacity: 1; }
+    60%  { transform: scale(1.15) rotate(-8deg); opacity: 1; }
+    100% { transform: scale(0) rotate(30deg); opacity: 0; }
+  }
+  @keyframes forgeAxeAppear {
+    0%   { transform: scale(0) rotate(-30deg); opacity: 0; }
+    60%  { transform: scale(1.3) rotate(5deg);  opacity: 1; }
+    100% { transform: scale(1)   rotate(0);     opacity: 1; }
+  }
+  @keyframes axeShake {
+    0%,100% { transform: rotate(0deg) scale(1); }
+    14%     { transform: rotate(-18deg) scale(1.12); }
+    28%     { transform: rotate(18deg)  scale(1.12); }
+    42%     { transform: rotate(-14deg) scale(1.08); }
+    56%     { transform: rotate(14deg)  scale(1.08); }
+    70%     { transform: rotate(-8deg)  scale(1.04); }
+    84%     { transform: rotate(8deg)   scale(1.04); }
+  }
+  @keyframes axeFly {
+    0%   { transform: translateX(-60px) rotate(-120deg); opacity: 0; }
+    55%  { transform: translateX(6px) rotate(8deg); opacity: 1; }
+    80%  { transform: translateX(-3px) rotate(-3deg); opacity: 1; }
+    100% { transform: translateX(0) rotate(0deg); opacity: 1; }
+  }
+  .axe-fly { display: inline-block; animation: axeFly 0.5s ease-out both; }
   @keyframes bossHit {
     0%,100%{ filter: brightness(1); transform: translateX(0); }
     25%    { filter: brightness(4) saturate(0); transform: translateX(-10px); }
     75%    { filter: brightness(4) saturate(0); transform: translateX(10px); }
+  }
+  @keyframes bossShakeLR {
+    0%,100%{ filter:brightness(1); transform:translateX(0) rotate(0); }
+    15%    { filter:brightness(5) saturate(0); transform:translateX(-18px) rotate(-8deg); }
+    35%    { filter:brightness(3) saturate(0.2); transform:translateX(18px) rotate(8deg); }
+    55%    { filter:brightness(2); transform:translateX(-10px) rotate(-4deg); }
+    75%    { filter:brightness(1.5); transform:translateX(10px) rotate(4deg); }
+    90%    { filter:brightness(1.1); transform:translateX(-4px) rotate(-1deg); }
   }
   @keyframes playerHit {
     0%,100%{ transform: translateY(0); }
@@ -599,18 +635,24 @@
 
   <!-- CHARACTER SELECT -->
   <div id="screen-character" class="screen">
-    <h2 class="screen-title">選擇你的角色！</h2>
-    <div id="char-grid-container"></div>
-    <div id="name-input-area" class="name-input-area" style="display:none;">
-      <div class="name-input-label">幫你的夥伴取個名字吧！</div>
-      <div class="name-input-row">
-        <div class="name-char-preview" id="name-char-preview"></div>
-        <input type="text" id="char-name-input" class="name-text-input"
-               placeholder="例如：小白、皮卡..." maxlength="6" oninput="onNameInput()"/>
-      </div>
-      <div class="name-hint">限 1–6 個字</div>
+    <h2 class="screen-title">選擇你的夥伴</h2>
+    <div id="char-grid-container" style="padding-bottom: 8px"></div>
+  </div>
+
+  <!-- 命名浮動底部面板（固定在畫面底部） -->
+  <div id="name-input-area" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;
+       background:white;border-radius:24px 24px 0 0;padding:16px 20px 28px;
+       box-shadow:0 -4px 24px rgba(0,0,0,0.15);animation:slideUp 0.25s ease">
+    <div style="font-size:17px;font-weight:900;color:#333;margin-bottom:10px;text-align:center">
+      幫你的夥伴取個名字吧！
     </div>
-    <button class="btn btn-primary" id="btn-confirm-char" onclick="confirmCharacter()" style="display:none;">
+    <div class="name-input-row" style="margin-bottom:6px">
+      <div class="name-char-preview" id="name-char-preview"></div>
+      <input type="text" id="char-name-input" class="name-text-input"
+             placeholder="例如：小白、皮卡..." maxlength="9" oninput="onNameInput()"/>
+    </div>
+    <div class="name-hint" style="text-align:center;margin-bottom:12px">限 1–9 個字</div>
+    <button class="btn btn-primary" id="btn-confirm-char" onclick="confirmCharacter()" style="display:none;width:100%">
       開始冒險！🚀
     </button>
   </div>
@@ -658,8 +700,8 @@
     <div class="preQuiz-char-badge" id="preQuiz-char-badge"></div>
     <div class="preQuiz-brain">🧠</div>
     <div class="preQuiz-title">小測驗開始！</div>
-    <div class="preQuiz-subtitle">三個單字都學完了！</div>
-    <div class="preQuiz-hint">🔨 三題全對才能得到槌子！</div>
+    <div class="preQuiz-subtitle" id="preQuiz-subtitle">三個單字都學完了！</div>
+    <div class="preQuiz-hint" id="preQuiz-hint">🔨 三題全對才能得到槌子！</div>
   </div>
 
   <!-- QUIZ -->
@@ -680,7 +722,7 @@
   <!-- QUIZ RESULT (perfect = hammer / noreward = encouragement) -->
   <div id="screen-quiz-result" class="screen">
     <div class="result-icon" id="result-icon"></div>
-    <div class="result-plus1" id="result-plus1" style="display:none;">+1 🔨</div>
+    <div class="result-plus1" id="result-plus1" style="display:none;text-align:center">+1</div>
     <div class="result-title" id="result-title"></div>
     <div class="result-subtitle" id="result-subtitle"></div>
     <button class="btn" id="result-btn" onclick="goToMap()">繼續冒險 🗺️</button>
@@ -692,6 +734,7 @@
       <!-- HUD -->
       <div class="map-hud">
         <div class="hud-player"   id="hud-player">🐧 冒險者</div>
+        <div class="hud-axes"     id="hud-axes">🪓×0</div>
         <div class="hud-hammers"  id="hud-hammers">🔨×0</div>
         <div class="hud-onigiri"  id="hud-onigiri"  onclick="showAnimalOverlay()">🍙×0</div>
         <div class="hud-position" id="hud-position">0/40</div>
@@ -1424,7 +1467,7 @@ function exportWordDatabase() {
 const gameState = {
   player: { character: null, name: '', level: 1, scene: 0, profileId: null },
   session: {
-    currentPosition: 0, hammerCount: 0,
+    currentPosition: 0, hammerCount: 0, axeCount: 0, pendingForgeOffer: false,
     learnedWords: [], wrongWords: [],
     wordGroups: [[], [], [], []],
     doubleNextRoll: false, phase: "learning", currentGroupIndex: 0
@@ -1438,6 +1481,13 @@ let learnState = {
   sentencesPlayed: new Set(),
   hadWrongAnswer: false   // tracks if any quiz answer was wrong
 };
+let _autoSpeakTimer = null;  // renderWordCard 的自動發音 timer
+let _ttsGeneration  = 0;     // 每次新佇列遞增，讓舊佇列自動失效
+function _cancelTTS() {
+  _ttsGeneration++;
+  if (_autoSpeakTimer) { clearTimeout(_autoSpeakTimer); _autoSpeakTimer = null; }
+  if (window.speechSynthesis) { try { speechSynthesis.cancel(); } catch(_) {} }
+}
 
 // ===================================================
 // SCREEN
@@ -1452,6 +1502,12 @@ function showScreen(id) {
     nav.classList.remove('hidden');
   }
   if (id === 'character') renderCharacterSelect();
+  else document.getElementById('name-input-area').style.display = 'none';
+  if (id === 'level') {
+    selectedLevel = null;
+    document.getElementById('btn-confirm-level').style.display = 'none';
+    document.querySelectorAll('.level-card').forEach(c => c.classList.remove('selected'));
+  }
 }
 function goHome() {
   resetGame();
@@ -1576,15 +1632,17 @@ function selectCharacter(char, el) {
   const nameArea = document.getElementById('name-input-area');
   nameArea.style.display = 'block';
   document.getElementById('name-char-preview').textContent = CHARACTER_EMOJIS[char];
-  document.getElementById('char-name-input').value = '';
+  const input = document.getElementById('char-name-input');
+  input.value = '';
   gameState.player.name = '';
   document.getElementById('btn-confirm-char').style.display = 'none';
+  setTimeout(() => input.focus(), 100);
 }
 
 function checkCharacterUnlocks() {
   if (!gameState.progress.unlockedCharacters) gameState.progress.unlockedCharacters = [];
   const allSessions = (gameState.progress.players || []).reduce(
-    (max, p) => Math.max(max, (p.profile && p.profile.sessionsCompleted) || 0), 0
+    (max, p) => Math.max(max, p.sessionsCompleted || 0), 0
   );
   let newUnlock = null;
   UNLOCK_CHARS.forEach(c => {
@@ -1675,10 +1733,11 @@ function startGame() {
 
   // 累積道具：從玩家紀錄讀取上局剩餘的槌子、飯糰
   const savedHammers   = profile.savedHammerCount  || 0;
+  const savedAxes      = profile.savedAxeCount     || 0;
   const savedOnigiri   = profile.savedOnigiriCount || 0;
   const savedAnimalFed = profile.savedAnimalFed    || 0;
   Object.assign(gameState.session, {
-    currentPosition: 0, hammerCount: savedHammers,
+    currentPosition: 0, hammerCount: savedHammers, axeCount: savedAxes, pendingForgeOffer: false,
     learnedWords: [], wrongWords: [],
     doubleNextRoll: false, currentGroupIndex: 0,
     onigiriCount: savedOnigiri, animalFed: savedAnimalFed, watermelonFed: 0,
@@ -1694,13 +1753,17 @@ function startGame() {
   const baseIds   = [...ALL_WORD_IDS, ...customIds.filter(id => !ALL_WORD_IDS.includes(id))];
   const unlearned = baseIds.filter(id => !learnedSoFar.includes(id));
   const learned   = baseIds.filter(id =>  learnedSoFar.includes(id));
-  // Fill up to 12: unlearned first, then repeats if needed
+  // L1 每組 2 個單字（共 8 個）；L2+ 每組 3 個（共 12 個）
+  const wordsPerGroup = gameState.player.level === 1 ? 2 : 3;
+  const totalWords = wordsPerGroup * 4;
   const pool = [...shuffleArray(unlearned), ...shuffleArray(learned)];
-  const shuffled = pool.slice(0, 12);
-
+  const shuffled = pool.slice(0, totalWords);
+  const g = wordsPerGroup;
   gameState.session.wordGroups = [
-    shuffled.slice(0,3), shuffled.slice(3,6),
-    shuffled.slice(6,9), shuffled.slice(9,12)
+    shuffled.slice(0,   g),
+    shuffled.slice(g,   g*2),
+    shuffled.slice(g*2, g*3),
+    shuffled.slice(g*3, g*4)
   ];
   gameState.session.mapCells = buildMapCells();
   // 預先平均分配幸運格獎勵（避免全部抽到同一種）
@@ -1733,10 +1796,8 @@ function startLearningPhase(groupIndex) {
 }
 
 function renderWordCard(index) {
-  // 切換單字時立刻清除前一個 TTS，避免音訊排隊導致下一個卡住
-  if (window.speechSynthesis) {
-    speechSynthesis.cancel();
-  }
+  // 切換單字時立刻中斷發音、清除舊 auto-speak timer
+  _cancelTTS();
   const speakBtn = document.getElementById('btn-speak-word');
   if (speakBtn) { speakBtn.classList.remove('speaking'); speakBtn.textContent = '🔊 聽單字發音'; }
 
@@ -1808,8 +1869,8 @@ function renderWordCard(index) {
   btnNext.textContent = index === learnState.words.length - 1 ? '開始小測驗！🧠' : '下一個 →';
   refreshNextBtn(word);
 
-  // Auto-speak the full spelling sequence
-  setTimeout(() => speakWordWithSpelling(), 400);
+  // Auto-speak the full spelling sequence（存 ID 以便被取消）
+  _autoSpeakTimer = setTimeout(() => { _autoSpeakTimer = null; speakWordWithSpelling(); }, 400);
 }
 
 // ===================================================
@@ -1895,10 +1956,12 @@ function _speakQueue(items, onDone) {
   try { speechSynthesis.resume(); } catch(_) {}
   if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
 
+  const gen = ++_ttsGeneration; // 此佇列的世代編號
   let idx = 0;
 
   // fallback=true 時不指定語音/語言，使用裝置預設（Android 英文未安裝時備援）
   function next(fallback) {
+    if (gen !== _ttsGeneration) { if (onDone) onDone(); return; } // 被更新的佇列取代，直接放棄
     if (idx >= items.length) { if (onDone) onDone(); return; }
     const { text, rate } = items[idx++];
 
@@ -2030,6 +2093,7 @@ function refreshNextBtn(word) {
 }
 
 function nextWordCard() {
+  _cancelTTS(); // 不管發音念到哪，立刻中斷
   const word = learnState.words[learnState.currentWordIndex];
   const hasSent = gameState.player.level === 1 && word.sentences && word.sentences.length > 0;
   if (hasSent && !word.sentences.every((_,i) => learnState.sentencesPlayed.has(i))) return;
@@ -2046,8 +2110,13 @@ function nextWordCard() {
 // PRE-QUIZ TRANSITION  (no hammer awarded here)
 // ===================================================
 function showPreQuizTransition() {
+  _cancelTTS(); // 進入測驗前確保發音全部停止
   const charEmoji = CHARACTER_EMOJIS[gameState.player.character] || '🐧';
+  const wordCount = learnState.words.length;
+  const countZh = wordCount === 2 ? '兩' : wordCount === 3 ? '三' : String(wordCount);
   document.getElementById('preQuiz-char-badge').textContent = charEmoji;
+  document.getElementById('preQuiz-subtitle').textContent = `${countZh}個單字都學完了！`;
+  document.getElementById('preQuiz-hint').textContent = `🔨 ${countZh}題全對才能得到槌子！`;
   showScreen('preQuiz');
   spawnStars();
   setTimeout(startQuiz, 1800);
@@ -2128,6 +2197,7 @@ function quizComplete() {
 
   if (perfect) {
     gameState.session.hammerCount++;
+    if (gameState.session.hammerCount >= 10) gameState.session.pendingForgeOffer = true;
     playSound('hammer');
     spawnStars();
 
@@ -2157,6 +2227,21 @@ function quizComplete() {
   }
 
   showScreen('quiz-result');
+
+  // 複習模式：改寫繼續按鈕行為
+  if (gameState.session.isReviewMode) {
+    const btn = document.getElementById('result-btn');
+    const nextIdx = (gameState.session.currentGroupIndex || 0) + 1;
+    const groups  = gameState.session.wordGroups || [];
+    const hasMore = nextIdx < groups.length && groups[nextIdx].length > 0;
+    if (hasMore) {
+      btn.textContent = `繼續複習 第${nextIdx + 1}組 →`;
+      btn.onclick = () => startLearningPhase(nextIdx);
+    } else {
+      btn.textContent = '完成複習！🎉';
+      btn.onclick = showReviewComplete;
+    }
+  }
 }
 
 // ===================================================
@@ -2195,10 +2280,59 @@ function buildMapCells() {
   return cells;
 }
 
+// ===================================================
+// REVIEW SESSION (從 Game Center 進入的單局複習)
+// ===================================================
+function startReviewSession(wordIds, level, playerProfileId) {
+  closeParentMode();
+  // 確保玩家 profile 正確載入
+  if (playerProfileId) {
+    const p = (gameState.progress.players || []).find(x => x.id === playerProfileId);
+    if (p) {
+      gameState.player.character  = p.character;
+      gameState.player.name       = p.name;
+      gameState.player.level      = p.level || level || 1;
+      gameState.player.profileId  = p.id;
+    }
+  }
+  const usedLevel = level || gameState.player.level || 1;
+  const g = usedLevel === 1 ? 2 : 3;
+  // 補足至 4 組（不足時重複尾端單字）
+  const ids = [...wordIds];
+  while (ids.length < g * 4) ids.push(ids[ids.length - 1] || wordIds[0]);
+  gameState.session = Object.assign(gameState.session || {}, {
+    isReviewMode: true,
+    currentGroupIndex: 0,
+    hammerCount: 0, onigiriCount: 0, animalFed: gameState.session.animalFed || 0,
+    watermelonFed: 0, wrongWords: [],
+    wordGroups: [ids.slice(0,g), ids.slice(g,g*2), ids.slice(g*2,g*3), ids.slice(g*3,g*4)]
+  });
+  startLearningPhase(0);
+}
+
+function showReviewComplete() {
+  const charEmoji = CHARACTER_EMOJIS[gameState.player.character] || '🐧';
+  showScreen('map'); // 讓地圖畫面成為背景
+  showEventOverlay(`
+    <span class="event-icon" style="font-size:80px;animation:bounceIn 0.5s ease-out both">🎓</span>
+    <div style="font-size:26px;font-weight:900;color:#FF6B35;margin-bottom:8px">複習完成！</div>
+    <div style="font-size:44px;margin-bottom:8px">${charEmoji}</div>
+    <div style="font-size:16px;color:#666;margin-bottom:20px">單字都複習過了，繼續加油！💪</div>
+    <button class="btn btn-primary" style="width:100%;margin-bottom:8px"
+      onclick="hideEventOverlay();gameState.session.isReviewMode=false;parentMode()">📊 回學習紀錄</button>
+    <button class="btn" style="background:#eee;color:#333;font-size:15px;width:100%"
+      onclick="hideEventOverlay();gameState.session.isReviewMode=false;resetGame();initStart()">🏠 回首頁</button>`);
+  spawnStars();
+}
+
 function goToMap() {
   saveSession();
   showScreen('map');
   renderMap();
+  if (gameState.session.pendingForgeOffer) {
+    gameState.session.pendingForgeOffer = false;
+    setTimeout(checkForgeAxe, 400);
+  }
   // Re-enable dice (in case we came back from learning)
   const btn = document.getElementById('dice-btn');
   if (btn) btn.disabled = false;
@@ -2266,11 +2400,123 @@ function renderMap() {
 function updateHUD() {
   const emoji = CHARACTER_EMOJIS[gameState.player.character] || '🐧';
   document.getElementById('hud-player').textContent   = `${emoji} ${gameState.player.name}`;
+  document.getElementById('hud-axes').textContent    = `🪓×${gameState.session.axeCount || 0}`;
   document.getElementById('hud-hammers').textContent = `🔨×${gameState.session.hammerCount}`;
   const fedTotal = gameState.session.animalFed || 0;
-  const fedThisLevel = fedTotal % ANIMAL_LEVEL_NEED;
+  const lv = getAnimalLevel();
+  const fedThisLevel = fedTotal - LEVEL_THRESHOLDS[Math.min(lv, LEVEL_THRESHOLDS.length - 1)];
   document.getElementById('hud-onigiri').innerHTML = `🍙×${fedThisLevel} ${getAnimalEmoji()}`;
   document.getElementById('hud-position').textContent = `${gameState.session.currentPosition}/40`;
+}
+
+// ===================================================
+// 斧頭打造系統
+// ===================================================
+function checkForgeAxe() {
+  if (gameState.session.hammerCount < 10) return;
+  const h = gameState.session.hammerCount;
+  showEventOverlay(`
+    <div style="font-size:18px;font-weight:900;color:#FF6B35;margin-bottom:8px">恭喜收集到 10 個槌子！</div>
+    <div style="margin-bottom:10px;line-height:1.5">
+      <div style="font-size:20px;letter-spacing:4px">🔨🔨🔨🔨🔨</div>
+      <div style="font-size:20px;letter-spacing:4px">🔨🔨🔨🔨🔨</div>
+    </div>
+    <div style="font-size:22px;color:#333;font-weight:900;margin-bottom:4px">是否要把十個槌子打造成斧頭？</div>
+    <div style="font-size:13px;color:#888;margin-bottom:18px">收集到三個斧頭可以讓魔王直接少二滴血！</div>
+    <div style="display:flex;gap:12px;justify-content:center">
+      <button onclick="forgeAxe()"
+        style="background:#E65100;color:white;border:none;border-radius:50px;
+               padding:12px 22px;font-size:16px;font-weight:900;
+               font-family:inherit;cursor:pointer;box-shadow:0 4px 0 #BF360C">
+        🪓 是，打造斧頭！
+      </button>
+      <button onclick="hideEventOverlay()"
+        style="background:#eee;color:#555;border:none;border-radius:50px;
+               padding:12px 22px;font-size:16px;font-weight:900;
+               font-family:inherit;cursor:pointer;box-shadow:0 4px 0 #bbb">
+        ❌ 否，保留槌子
+      </button>
+    </div>`);
+}
+
+function forgeAxe() {
+  gameState.session.hammerCount -= 10;
+  gameState.session.axeCount   += 1;
+  updateHUD();
+  const axeNow = gameState.session.axeCount;
+
+  showEventOverlay(`
+    <div id="forge-title" style="font-size:20px;font-weight:900;color:#FF6B35;margin-bottom:4px">⚒️ 打造中...</div>
+    <div id="forge-circle" style="position:relative;width:200px;height:200px;margin:0 auto;
+         overflow:hidden;transition:height 0.4s ease,margin 0.4s ease"></div>
+    <div id="forge-axe-big" style="font-size:96px;opacity:0">🪓</div>
+    <div id="forge-axe-count" style="font-size:14px;color:#888;opacity:0;margin-top:2px">現有 ${axeNow} 把斧頭</div>`);
+
+  // 把 10 個槌子排在圓形上
+  const container = document.getElementById('forge-circle');
+  const radius = 72;
+  const positions = [];
+  for (let i = 0; i < 10; i++) {
+    const angle = (i * 36 - 90) * Math.PI / 180;
+    const x = 100 + radius * Math.cos(angle) - 12;
+    const y = 100 + radius * Math.sin(angle) - 12;
+    positions.push({ x, y });
+    const h = document.createElement('div');
+    h.className = 'forge-h';
+    h.textContent = '🔨';
+    h.style.cssText = `position:absolute;left:${x}px;top:${y}px;font-size:22px;
+      transition:transform 0.65s cubic-bezier(0.5,0,1,0.8),opacity 0.65s ease-in;`;
+    container.appendChild(h);
+  }
+
+  // 由外往內收縮消失
+  setTimeout(() => {
+    document.querySelectorAll('.forge-h').forEach((h, i) => {
+      const dx = 88 - positions[i].x;
+      const dy = 88 - positions[i].y;
+      h.style.transitionDelay = `${i * 0.04}s`;
+      h.style.transform = `translate(${dx}px,${dy}px) scale(0)`;
+      h.style.opacity = '0';
+    });
+  }, 500);
+
+  // 槌子消失後圓形容器縮掉、斧頭出現、標題換字
+  setTimeout(() => {
+    const c = document.getElementById('forge-circle');
+    if (c) { c.style.height = '0'; c.style.margin = '0 auto'; }
+    const axeEl = document.getElementById('forge-axe-big');
+    if (axeEl) {
+      axeEl.style.transition = 'none';
+      axeEl.style.animation  = 'forgeAxeAppear 0.7s ease-out both';
+      axeEl.style.opacity    = '1';
+    }
+    const title = document.getElementById('forge-title');
+    if (title) title.textContent = '✨ 打造完成！';
+  }, 1400);
+
+  // 搖動三下 + 星星 + 音效 + 顯示數量
+  setTimeout(() => {
+    spawnStars();
+    playSound('hammer');
+    const axeEl = document.getElementById('forge-axe-big');
+    if (axeEl) axeEl.style.animation = 'axeShake 0.9s ease-in-out both';
+    const cnt = document.getElementById('forge-axe-count');
+    if (cnt) cnt.style.opacity = '1';
+  }, 2200);
+
+  // 繼續按鈕
+  setTimeout(() => {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-primary';
+    btn.style.marginTop = '12px';
+    btn.textContent = '繼續冒險！';
+    btn.onclick = function() {
+      hideEventOverlay();
+      if (gameState.session.hammerCount >= 10) setTimeout(checkForgeAxe, 300);
+    };
+    const modal = document.getElementById('event-modal');
+    if (modal) modal.appendChild(btn);
+  }, 3200);
 }
 
 let _gameTimerInterval = null;
@@ -2507,14 +2753,14 @@ function triggerReview() {
       const _charKey = gameState.player.character || 'penguin';
       const animalDisplayEmoji = CHARACTER_EMOJIS[_charKey] || '🐧';
       const animalName = CHARACTER_NAMES[_charKey] || '夥伴';
-      document.getElementById('event-modal').insertAdjacentHTML('beforeend', `
-        <div style="text-align:center;padding-top:8px;position:relative">
-          <span id="rev-animal-big" style="font-size:64px;display:block;animation:bounceIn 0.4s ease-out both">${animalDisplayEmoji}</span>
-          <span id="rev-onigiri-big" style="font-size:52px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍙</span>
-          <div style="font-size:20px;font-weight:900;color:#2E7D32;margin-top:4px">獲得一顆飯糰！</div>
-          <div style="font-size:14px;color:#888;margin-bottom:12px">現有 ${gameState.session.onigiriCount} 顆</div>
-          <button class="btn btn-green" id="feed-btn" onclick="reviewFeedAndContinue()">
-            ${animalDisplayEmoji} 餵${animalName}！
+      showEventOverlay(`
+        <div style="text-align:center;padding:4px 0">
+          <div style="font-size:22px;font-weight:900;color:#2E7D32;margin-bottom:10px">🎉 獲得一顆飯糰！</div>
+          <span id="rev-animal-big" style="font-size:72px;display:block;animation:bounceIn 0.4s ease-out both">${animalDisplayEmoji}</span>
+          <span id="rev-onigiri-big" style="font-size:56px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍙</span>
+          <div style="font-size:14px;color:#888;margin:8px 0 16px">現有 ${gameState.session.onigiriCount} 顆</div>
+          <button class="btn btn-green" id="feed-btn" onclick="reviewFeedAndContinue()" style="width:100%">
+            🍙 餵飯糰！
           </button>
         </div>`);
     } else {
@@ -2550,13 +2796,17 @@ function reviewFeedAndContinue() {
     const newLevel = getAnimalLevel();
     if (newLevel > prevLevel) {
       playSound('hammer'); spawnStars();
-      const isMax = newLevel >= 4;
-      const lvlIcon = isMax
-        ? '<span style="font-size:52px;letter-spacing:4px;animation:bounceIn 0.5s ease-out both">⭐⭐⭐⭐⭐</span>'
-        : `<span class="event-icon" style="font-size:76px;animation:bounceIn 0.5s ease-out both">${getAnimalEmoji()}</span>`;
+      const isStar = newLevel >= 4;
+      const isMax  = newLevel >= 8;
+      const stars  = isStar ? newLevel - 3 : 0;
+      const petEmoji = getAnimalEmoji();
+      const lvlIcon = isStar
+        ? `<span style="font-size:72px;display:block;animation:bounceIn 0.5s ease-out both">${petEmoji}</span>
+           <div style="font-size:${stars>=4?'26px':'32px'};letter-spacing:4px;animation:bounceIn 0.6s 0.1s ease-out both">${'⭐'.repeat(stars)}</div>`
+        : `<span class="event-icon" style="font-size:76px;animation:bounceIn 0.5s ease-out both">${petEmoji}</span>`;
       showEventOverlay(`
-        ${lvlIcon}
-        <div class="event-title" style="color:#FF6B35">🎉 ${isMax ? '五星傳說達成！！' : '夥伴升級了！！'}</div>
+        <div style="text-align:center">${lvlIcon}</div>
+        <div class="event-title" style="color:#FF6B35">🎉 ${isMax ? '五星傳說達成！！' : isStar ? `${stars}星傳說！` : '夥伴升級了！！'}</div>
         <div style="font-size:20px;font-weight:900;margin:8px 0">${ANIMAL_LEVEL_NAMES[newLevel]}</div>
         <div style="font-size:14px;color:#888">${isMax ? '已達最高等級！太棒了！' : '繼續加油！'}</div>`);
       setTimeout(hideEventOverlay, 2500);
@@ -2605,6 +2855,7 @@ function triggerLucky() {
       return;
     } else if (prize.id === 'hammer') {
       gameState.session.hammerCount++;
+      if (gameState.session.hammerCount >= 10) gameState.session.pendingForgeOffer = true;
       updateHUD(); spawnStars(); playSound('hammer');
     } else if (prize.id === 'double') {
       gameState.session.doubleNextRoll = true;
@@ -2685,18 +2936,16 @@ function triggerChallenge() {
       const charKey  = gameState.player.character || 'penguin';
       const animalEmoji = CHARACTER_EMOJIS[charKey] || '🐧';
       const animalName  = CHARACTER_NAMES[charKey] || '夥伴';
-      document.getElementById('chal-result').innerHTML = `
-        <div class="event-result-banner good" style="margin-top:12px">✅ 答對了！獲得一片西瓜！🍉</div>
-        <div style="text-align:center;padding-top:10px">
-          <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:10px">
-            <span id="chal-animal-big" style="font-size:64px;animation:bounceIn 0.4s ease-out both">${animalEmoji}</span>
-            <span id="chal-happy-notes" style="font-size:28px;line-height:1.4;opacity:0;transition:opacity 0.3s">🎵<br>🎶</span>
-          </div><br>
-          <span id="chal-melon-big" style="font-size:40px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍉</span>
-          <button class="btn btn-green" id="chal-feed-btn" onclick="challengeFeedWatermelon()" style="margin-top:10px;display:block;width:100%">
-            餵${animalName}
+      showEventOverlay(`
+        <div style="text-align:center;padding:4px 0">
+          <div style="font-size:22px;font-weight:900;color:#1B5E20;margin-bottom:10px">🎉 獲得一片西瓜！</div>
+          <span id="chal-animal-big" style="font-size:72px;display:block;animation:bounceIn 0.4s ease-out both">${animalEmoji}</span>
+          <span id="chal-happy-notes" style="font-size:28px;line-height:1.4;opacity:0;transition:opacity 0.3s;display:block;margin:4px 0">🎵 🎶</span>
+          <span id="chal-melon-big" style="font-size:56px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍉</span>
+          <button class="btn btn-green" id="chal-feed-btn" onclick="challengeFeedWatermelon()" style="margin-top:14px;width:100%">
+            🍉 餵西瓜！
           </button>
-        </div>`;
+        </div>`);
     } else {
       playSound('wrong');
       if (!gameState.session.wrongWords.includes(wId)) gameState.session.wrongWords.push(wId);
@@ -2803,18 +3052,16 @@ function triggerSentenceChallenge(word, wordId, learnedIds, prevPos) {
     });
     if (selected === correct) {
       playSound('correct'); spawnStars();
-      document.getElementById('chal-result').innerHTML = `
-        <div class="event-result-banner good" style="margin-top:12px">✅ 答對了！獲得一片西瓜！🍉</div>
-        <div style="text-align:center;padding-top:10px">
-          <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:10px">
-            <span id="chal-animal-big" style="font-size:64px;animation:bounceIn 0.4s ease-out both">${animalEmoji}</span>
-            <span id="chal-happy-notes" style="font-size:28px;line-height:1.4;opacity:0;transition:opacity 0.3s">🎵<br>🎶</span>
-          </div><br>
-          <span id="chal-melon-big" style="font-size:40px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍉</span>
-          <button class="btn btn-green" id="chal-feed-btn" onclick="challengeFeedWatermelon()" style="margin-top:10px;display:block;width:100%">
-            餵${animalName}
+      showEventOverlay(`
+        <div style="text-align:center;padding:4px 0">
+          <div style="font-size:22px;font-weight:900;color:#1B5E20;margin-bottom:10px">🎉 獲得一片西瓜！</div>
+          <span id="chal-animal-big" style="font-size:72px;display:block;animation:bounceIn 0.4s ease-out both">${animalEmoji}</span>
+          <span id="chal-happy-notes" style="font-size:28px;line-height:1.4;opacity:0;transition:opacity 0.3s;display:block;margin:4px 0">🎵 🎶</span>
+          <span id="chal-melon-big" style="font-size:56px;display:inline-block;animation:bounceIn 0.5s 0.1s ease-out both">🍉</span>
+          <button class="btn btn-green" id="chal-feed-btn" onclick="challengeFeedWatermelon()" style="margin-top:14px;width:100%">
+            🍉 餵西瓜！
           </button>
-        </div>`;
+        </div>`);
     } else {
       playSound('wrong');
       if (!gameState.session.wrongWords.includes(wId)) gameState.session.wrongWords.push(wId);
@@ -2984,57 +3231,76 @@ function triggerTeleport() {
 // ── 🐾 動物飼育系統 ─────────────────────────────────────
 // 每3顆飯糰升1級，共5個等級（0→4），第4級為五星傳說
 const ANIMAL_LEVEL_EMOJIS = {
-  penguin: ['🥚','🐣','🐥','🐧','⭐'],
-  lion:    ['🥚','🐱','😺','🦁','⭐'],
-  rabbit:  ['🥚','🐰','🐇','🐇','⭐'],
-  cat:     ['🥚','🐱','😸','🐈','⭐'],
-  dog:     ['🥚','🐶','🐕','🦮','⭐'],
-  bear:    ['🥚','🐻','🦊','🦊','⭐'],
-  panda:   ['🥚','🐼','🐼','🐼','⭐'],
-  raccoon: ['🥚','🦝','🦝','🦝','⭐'],
-  dolphin: ['🥚','🐬','🐬','🐬','⭐'],
-  unicorn: ['🥚','🦄','🦄','🦄','⭐'],
+  penguin: ['🥚','🐣','🐥','🐧'],
+  lion:    ['🥚','🐱','😺','🦁'],
+  rabbit:  ['🥚','🐰','🐇','🐇🥕'],
+  cat:     ['🥚','🐱','😸','🐈'],
+  dog:     ['🥚','🐶','🐕','🦮'],
+  bear:    ['🥚','🐻','🦊','🦊🍗'],
+  panda:   ['🥚','🐼','🐼','🐼'],
+  raccoon: ['🥚','🦝','🦝','🦝'],
+  dolphin: ['🥚','🐬','🐬','🐬'],
+  unicorn: ['🥚','🦄','🦄','🦄'],
 };
-const ANIMAL_LEVEL_NAMES = ['蛋蛋期 🌱','小寶寶 🐣','成長期 💪','成熟期 🔥','五星傳說 ⭐'];
-const ANIMAL_LEVEL_NEED = 3; // 每級需要幾顆飯糰
+const ANIMAL_LEVEL_NAMES = [
+  '蛋蛋期 🌱','小寶寶 🐣','成長期 💪','成熟期 🔥',
+  '⭐ 一星傳說','⭐⭐ 二星傳說','⭐⭐⭐ 三星傳說','⭐⭐⭐⭐ 四星傳說','⭐⭐⭐⭐⭐ 五星傳說'
+];
+// 升級門檻（累積飯糰數）：0→1:3顆, 1→2:6顆, 2→3:9顆, 3+每星:10顆
+const LEVEL_THRESHOLDS = [0, 3, 9, 18, 28, 38, 48, 58, 68];
 
 function getAnimalLevel() {
   const fed = gameState.session.animalFed || 0;
-  return Math.min(4, Math.floor(fed / ANIMAL_LEVEL_NEED));
+  for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (fed >= LEVEL_THRESHOLDS[i]) return i;
+  }
+  return 0;
+}
+function getAnimalStageEmoji(char, level) {
+  const stage = Math.min(3, level);
+  return (ANIMAL_LEVEL_EMOJIS[char] || ANIMAL_LEVEL_EMOJIS.penguin)[stage];
 }
 function getAnimalEmoji() {
   const char = gameState.player.character || 'penguin';
-  const level = getAnimalLevel();
-  if (level >= 4) return '⭐'; // 五星傳說
-  return (ANIMAL_LEVEL_EMOJIS[char] || ANIMAL_LEVEL_EMOJIS.penguin)[level];
+  return getAnimalStageEmoji(char, getAnimalLevel());
 }
 
 function showAnimalOverlay() {
-  const fed   = gameState.session.animalFed || 0;
-  const level = getAnimalLevel();
+  const fed     = gameState.session.animalFed || 0;
+  const level   = getAnimalLevel();
   const onigiri = gameState.session.onigiriCount || 0;
-  const fedThisLevel = fed % ANIMAL_LEVEL_NEED;
+  const isMaxLevel = level >= 8;
+  const isStar  = level >= 4;
+  const stars   = isStar ? level - 3 : 0;
+
+  // 計算此級進度
+  const threshold = LEVEL_THRESHOLDS[Math.min(level, LEVEL_THRESHOLDS.length - 1)];
+  const nextThreshold = LEVEL_THRESHOLDS[Math.min(level + 1, LEVEL_THRESHOLDS.length - 1)];
+  const fedThisLevel = fed - threshold;
+  const needed = isMaxLevel ? 0 : nextThreshold - threshold;
+
   const levelName = ANIMAL_LEVEL_NAMES[level];
-  const isMaxLevel = level >= 4;
-
-  // 大圖：最高級顯示五顆星，否則顯示動物
   const charKey = gameState.player.character || 'penguin';
-  const stageEmoji = isMaxLevel
-    ? '<span style="letter-spacing:4px">⭐⭐⭐⭐⭐</span>'
-    : `<span style="font-size:72px">${(ANIMAL_LEVEL_EMOJIS[charKey]||ANIMAL_LEVEL_EMOJIS.penguin)[level]}</span>`;
+  const petEmoji = getAnimalStageEmoji(charKey, level);
 
-  // 進度飯糰點（3格）
-  const dots = isMaxLevel ? '' : Array.from({length: ANIMAL_LEVEL_NEED}, (_,i) =>
-    `<span style="font-size:24px">${i < fedThisLevel ? '🍙' : '⬜'}</span>`).join(' ');
+  // 大圖：成熟期+搭配星星，否則顯示當前階段動物
+  const stageDisplay = isStar
+    ? `<div style="font-size:72px;line-height:1">${petEmoji}</div>
+       <div style="font-size:${stars>=4?'26px':'32px'};letter-spacing:4px;margin-top:4px">${'⭐'.repeat(stars)}</div>`
+    : `<div style="font-size:72px">${petEmoji}</div>`;
+
+  // 進度點（依此級所需數量動態顯示）
+  const dots = isMaxLevel ? '' : Array.from({length: needed}, (_,i) =>
+    `<span style="font-size:22px">${i < fedThisLevel ? '🍙' : '⬜'}</span>`).join(' ');
 
   showEventOverlay(`
-    <div class="event-icon" style="font-size:${isMaxLevel?'52px':'72px'};margin-bottom:6px">${stageEmoji}</div>
+    <div style="text-align:center;margin-bottom:6px">${stageDisplay}</div>
     <div class="event-title">${gameState.player.name} 的小夥伴</div>
     <div style="font-size:18px;font-weight:900;color:#FF6B35;margin-bottom:10px">${levelName}</div>
     <div style="font-size:14px;color:#888;margin-bottom:6px;font-weight:700">
-      ${isMaxLevel ? '🎉 五星傳說！最高等級！' : `升級還需 ${ANIMAL_LEVEL_NEED - fedThisLevel} 顆飯糰`}
+      ${isMaxLevel ? '🎉 五星傳說！最高等級！' : `升級還需 ${needed - fedThisLevel} 顆飯糰`}
     </div>
-    <div style="margin-bottom:16px;letter-spacing:4px">${dots}</div>
+    <div style="margin-bottom:16px;letter-spacing:2px">${dots}</div>
     <div style="font-size:16px;font-weight:700;color:#333;margin-bottom:14px">現有飯糰：🍙 × ${onigiri}</div>
     <button class="btn btn-green" onclick="feedAnimal()" ${onigiri<1||isMaxLevel?'disabled style="opacity:0.4"':''}>
       🍙 餵食一顆飯糰
@@ -3053,13 +3319,17 @@ function feedAnimal() {
   const newLevel = getAnimalLevel();
   if (newLevel > prevLevel) {
     playSound('hammer'); spawnStars();
-    const isMax = newLevel >= 4;
-    const bigDisplay = isMax
-      ? '<span style="font-size:52px;letter-spacing:4px;animation:bounceIn 0.5s ease-out both">⭐⭐⭐⭐⭐</span>'
-      : `<span class="event-icon" style="font-size:80px;animation:bounceIn 0.5s ease-out both">${getAnimalEmoji()}</span>`;
+    const isStar = newLevel >= 4;
+    const isMax  = newLevel >= 8;
+    const stars  = isStar ? newLevel - 3 : 0;
+    const petEmoji = getAnimalEmoji();
+    const bigDisplay = isStar
+      ? `<span style="font-size:80px;display:block;animation:bounceIn 0.5s ease-out both">${petEmoji}</span>
+         <div style="font-size:${stars>=4?'28px':'34px'};letter-spacing:4px;animation:bounceIn 0.6s 0.1s ease-out both">${'⭐'.repeat(stars)}</div>`
+      : `<span class="event-icon" style="font-size:80px;animation:bounceIn 0.5s ease-out both">${petEmoji}</span>`;
     showEventOverlay(`
-      ${bigDisplay}
-      <div class="event-title" style="color:#FF6B35">🎉 ${isMax ? '五星傳說達成！！' : '升級了！！'}</div>
+      <div style="text-align:center">${bigDisplay}</div>
+      <div class="event-title" style="color:#FF6B35">🎉 ${isMax ? '五星傳說達成！！' : isStar ? `${stars}星傳說！` : '升級了！！'}</div>
       <div style="font-size:20px;font-weight:900;color:#333;margin:10px 0">${ANIMAL_LEVEL_NAMES[newLevel]}</div>
       <div style="font-size:16px;color:#666;margin-bottom:16px">
         ${isMax ? '你的夥伴已達到最高等級！太厲害了！🌟' : '小夥伴變得更強壯了！'}
@@ -3333,10 +3603,18 @@ function startBossBattle() {
       <button class="btn btn-primary" style="margin-top:16px" onclick="hideEventOverlay()">繼續準備</button>`);
     return;
   }
+  if (gameState.session.axeCount >= 3) {
+    _offerAxeAttack(available);
+  } else {
+    _initBossBattle(available, 6);
+  }
+}
+
+function _initBossBattle(available, totalRounds) {
   bossState = {
-    bossHP: 6, playerHP: 3, round: 0,
+    bossHP: totalRounds, playerHP: 3, round: 0, totalRounds: totalRounds,
     words: shuffleArray(available),
-    roundTypes: shuffleArray(['picture','listen','chinese','spell','sentence','lightning','listen_pick','eng_zh']).slice(0,6),
+    roundTypes: shuffleArray(['picture','listen','chinese','spell','sentence','lightning','listen_pick','eng_zh']).slice(0, totalRounds),
     lightningIdx: 0, lightningWords: [], lightningScore: 0,
   };
   const char = CHARACTER_EMOJIS[gameState.player.character] || '🐧';
@@ -3348,7 +3626,7 @@ function startBossBattle() {
       <div style="text-align:center">
         <div style="font-size:32px">👹</div>
         <div style="font-size:12px;font-weight:900;color:#c0392b">大魔王</div>
-        <div style="font-size:20px">❤️❤️❤️❤️❤️❤️</div>
+        <div style="font-size:20px">${'❤️'.repeat(totalRounds)}</div>
       </div>
       <div style="text-align:center">
         <div style="font-size:32px">${char}</div>
@@ -3359,7 +3637,154 @@ function startBossBattle() {
     <button class="btn btn-primary" onclick="showBossRound()">⚔️ 開始挑戰！</button>`);
 }
 
-function _bossHearts()  { return '❤️'.repeat(bossState.bossHP)   + '🖤'.repeat(6 - bossState.bossHP); }
+function _offerAxeAttack(available) {
+  showEventOverlay(`
+    <div style="font-size:56px;margin-bottom:8px">🪓🪓🪓</div>
+    <div style="font-size:22px;font-weight:900;color:#8B4513;margin-bottom:8px">恭喜收集到 3 個斧頭！</div>
+    <div style="font-size:15px;color:#333;margin-bottom:4px">是否要使用斧頭攻擊魔王？</div>
+    <div style="font-size:13px;color:#888;margin-bottom:18px">可以讓他直接少二滴血，只需過 4 關！</div>
+    <div style="display:flex;gap:12px;justify-content:center">
+      <button onclick="window._axeChoice(true)"
+        style="background:#E65100;color:white;border:none;border-radius:50px;
+               padding:12px 22px;font-size:16px;font-weight:900;
+               font-family:inherit;cursor:pointer;box-shadow:0 4px 0 #BF360C">
+        🪓 是，發動攻擊！
+      </button>
+      <button onclick="window._axeChoice(false)"
+        style="background:#eee;color:#555;border:none;border-radius:50px;
+               padding:12px 22px;font-size:16px;font-weight:900;
+               font-family:inherit;cursor:pointer;box-shadow:0 4px 0 #bbb">
+        ❌ 否，正常挑戰
+      </button>
+    </div>`);
+  window._axeChoice = function(useAxe) {
+    window._axeChoice = null;
+    if (useAxe) {
+      _showAxeAttackAnimation(available);
+    } else {
+      _initBossBattle(available, 6);
+    }
+  };
+}
+
+function _playAxeHitSound() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+    const t = ctx.currentTime;
+    // 主「咚」音：300Hz → 120Hz（喇叭可聽範圍，有厚度感）
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = 'sine';
+    o.frequency.setValueAtTime(300, t);
+    o.frequency.exponentialRampToValueAtTime(120, t + 0.4);
+    g.gain.setValueAtTime(0.85, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    o.start(t); o.stop(t + 0.5);
+    // 撞擊瞬間高頻：800Hz → 200Hz（短暫，增加撞擊感）
+    const o2 = ctx.createOscillator(), g2 = ctx.createGain();
+    o2.connect(g2); g2.connect(ctx.destination);
+    o2.type = 'triangle';
+    o2.frequency.setValueAtTime(800, t);
+    o2.frequency.exponentialRampToValueAtTime(200, t + 0.12);
+    g2.gain.setValueAtTime(0.45, t);
+    g2.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+    o2.start(t); o2.stop(t + 0.15);
+    // 短噪音（帶通 600Hz，加強「叩」的質感）
+    const bufSize = Math.floor(ctx.sampleRate * 0.05);
+    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / bufSize);
+    const noise = ctx.createBufferSource();
+    const nf = ctx.createBiquadFilter(), ng = ctx.createGain();
+    nf.type = 'bandpass'; nf.frequency.value = 600; nf.Q.value = 0.5;
+    noise.buffer = buf;
+    noise.connect(nf); nf.connect(ng); ng.connect(ctx.destination);
+    ng.gain.setValueAtTime(0.5, t);
+    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+    noise.start(t); noise.stop(t + 0.05);
+  } catch(e) {}
+}
+
+function _showAxeAttackAnimation(available) {
+  gameState.session.axeCount -= 3;
+  updateHUD();
+  const bossLines = [
+    '你怎麼拿到這麼多斧頭！好痛啊～',
+    '別想這麼輕易打敗我，繼續闖關吧！',
+    '我還有四滴血，看你有多厲害！'
+  ];
+  const line = bossLines[Math.floor(Math.random() * bossLines.length)];
+
+  showEventOverlay(`
+    <div style="text-align:center">
+      <div style="font-size:20px;font-weight:900;color:#E65100;margin-bottom:4px">⚔️ 斧頭攻擊！</div>
+      <div style="position:relative;width:180px;height:96px;margin:0 auto 32px;overflow:visible">
+        <div id="atk-a1" style="position:absolute;font-size:38px;left:50%;top:-60px;
+          transform:translateX(-50%);opacity:1;transition:transform 0.32s ease,opacity 0.28s ease">🪓</div>
+        <div id="atk-a2" style="position:absolute;font-size:38px;left:50%;top:-60px;
+          transform:translateX(-50%);opacity:0.25;transition:transform 0.32s ease,opacity 0.28s ease">🪓</div>
+        <div id="atk-a3" style="position:absolute;font-size:38px;left:50%;top:-60px;
+          transform:translateX(-50%);opacity:0.25;transition:transform 0.32s ease,opacity 0.28s ease">🪓</div>
+        <div style="text-align:center">
+          <div id="atk-boss" style="font-size:88px;display:inline-block">👹</div>
+        </div>
+      </div>
+      <div id="atk-speech" style="opacity:0;transition:opacity 0.4s;background:#fff3e0;border:2px solid #FF6D00;
+          border-radius:16px;padding:10px 16px;margin-bottom:10px;font-size:15px;font-weight:900;color:#E65100">
+        💬 ${line}
+      </div>
+      <div id="atk-hp" style="opacity:0;transition:opacity 0.4s;font-size:15px;color:#555;margin-bottom:12px">
+        魔王的血量：❤️❤️❤️❤️🖤🖤
+      </div>
+      <button id="atk-btn" class="btn btn-primary" style="display:none;margin:0 auto" onclick="window._axeAnimDone()">
+        ⚔️ 開始挑戰！
+      </button>
+    </div>`);
+
+  function strikeAxe(axeId, delay) {
+    setTimeout(() => {
+      const axeEl = document.getElementById(axeId);
+      if (axeEl) {
+        axeEl.style.opacity = '1';
+        setTimeout(() => {
+          axeEl.style.transform = 'translateX(-50%) translateY(90px) rotate(110deg)';
+          axeEl.style.opacity = '0';
+          setTimeout(() => {
+            const boss = document.getElementById('atk-boss');
+            if (boss) {
+              boss.style.animation = 'none';
+              void boss.offsetWidth;
+              boss.style.animation = 'bossShakeLR 0.55s ease-out';
+            }
+            _playAxeHitSound();
+          }, 260);
+        }, 150);
+      }
+    }, delay);
+  }
+
+  strikeAxe('atk-a1', 400);
+  strikeAxe('atk-a2', 1200);
+  strikeAxe('atk-a3', 2000);
+
+  setTimeout(() => {
+    const s = document.getElementById('atk-speech');
+    const h = document.getElementById('atk-hp');
+    const b = document.getElementById('atk-btn');
+    if (s) s.style.opacity = '1';
+    if (h) h.style.opacity = '1';
+    if (b) b.style.display = 'block';
+  }, 3100);
+
+  window._axeAnimDone = function() {
+    window._axeAnimDone = null;
+    _initBossBattle(available, 4);
+  };
+}
+
+function _bossHearts()  { return '❤️'.repeat(bossState.bossHP) + '🖤'.repeat(bossState.totalRounds - bossState.bossHP); }
 function _playerHearts(){ return '❤️'.repeat(bossState.playerHP) + '🖤'.repeat(3 - bossState.playerHP); }
 
 // 魔王關答錯共用：有槌子時自動跳出是/否對話框
@@ -3438,7 +3863,7 @@ function _bossHUD() {
       <div style="font-size:11px;font-weight:900;color:#ef5350">大魔王</div>
       <div style="font-size:15px" id="bs-hp">${_bossHearts()}</div>
     </div>
-    <div class="boss-round-badge">第 ${bossState.round+1} / 6 關</div>
+    <div class="boss-round-badge">第 ${bossState.round+1} / ${bossState.totalRounds} 關</div>
     <div class="boss-side">
       <div id="pl-sprite" style="font-size:28px">${char}</div>
       <div style="font-size:11px;font-weight:900;color:#1565C0">${gameState.player.name}</div>
@@ -3450,7 +3875,7 @@ function _bossHUD() {
 function showBossRound() {
   if (bossState.bossHP   <= 0) { bossBattleEnd(true);  return; }
   if (bossState.playerHP <= 0) { bossBattleEnd(false); return; }
-  if (bossState.round    >= 6) { bossBattleEnd(bossState.bossHP < bossState.playerHP); return; }
+  if (bossState.round    >= bossState.totalRounds) { bossBattleEnd(bossState.bossHP < bossState.playerHP); return; }
 
   const type = bossState.roundTypes[bossState.round];
   if (type === 'lightning') {
@@ -3587,10 +4012,7 @@ function showBossLightningQ() {
              </div>
            </div>`
         : `<button class="btn btn-primary" style="margin-top:12px" onclick="_bossLightningNext()">繼續！</button>`;
-      showEventOverlay(`${_bossHUD()}
-        <div style="font-size:44px;margin:10px 0">⚡</div>
-        <div class="event-result-banner bad">答對 ${score}/3，被魔王攻擊！</div>
-        ${hamDialog}`);
+      window._bossLightningNext = () => { bossState.round++; showBossRound(); };
       window._bossLightHC = function(useHammer) {
         window._bossLightHC = null;
         if (useHammer && gameState.session.hammerCount > 0) {
@@ -3609,6 +4031,10 @@ function showBossLightningQ() {
              <button class="btn btn-primary" style="margin-top:8px" onclick="_bossLightningNext()">繼續！</button>`);
         }
       };
+      showEventOverlay(`${_bossHUD()}
+        <div style="font-size:44px;margin:10px 0">⚡</div>
+        <div class="event-result-banner bad">答對 ${score}/3，被魔王攻擊！</div>
+        ${hamDialog}`);
     }
     window._bossLightningNext = () => { bossState.round++; showBossRound(); };
     return;
@@ -3624,6 +4050,7 @@ function showBossLightningQ() {
     <div class="boss-q-type">⚡ 閃電回合 ${bossState.lightningIdx+1} / 3</div>
     <div class="timer-bar-wrap"><div class="timer-bar" id="lt-bar" style="width:100%;background:#FFD93D"></div></div>
     <div style="font-size:60px;margin:6px 0">${word.emoji}</div>
+    <div style="font-size:24px;font-weight:900;color:#333;margin-bottom:6px">${word.chinese}</div>
     <div class="event-answers">
       ${opts.map(o=>`<button class="event-answer-btn" data-id="${o.id}" onclick="_ltAnswer('${o.id}','${word.id}')">${o.english}</button>`).join('')}
     </div>`);
@@ -3714,6 +4141,7 @@ function bossBattleEnd(playerWon) {
     const prof = getCurrentProfile();
     if (prof) {
       prof.savedHammerCount  = gameState.session.hammerCount  || 0;
+      prof.savedAxeCount     = gameState.session.axeCount     || 0;
       prof.savedOnigiriCount = gameState.session.onigiriCount || 0;
       prof.savedAnimalFed    = gameState.session.animalFed    || 0;
       saveProgress();
@@ -3722,46 +4150,47 @@ function bossBattleEnd(playerWon) {
   diceRolling = false;
   if (playerWon) {
     playSound('hammer'); spawnStars();
-    try {
-      gameState.progress.completedSessions.push({ level: gameState.player.level, date: Date.now() });
-      // Update player profile
-      const profile = getCurrentProfile();
-      if (profile) {
-        gameState.session.wordGroups.flat().forEach(id => {
-          if (!profile.learnedWordIds.includes(id)) profile.learnedWordIds.push(id);
-        });
-        gameState.session.wrongWords.forEach(id => {
-          if (!profile.wrongWordIds) profile.wrongWordIds = [];
-          if (!profile.wrongWordIds.includes(id)) profile.wrongWordIds.push(id);
-        });
-        profile.sessionsCompleted = (profile.sessionsCompleted || 0) + 1;
-        profile.lastPlayed = Date.now();
-        // 學完全部 Level 1 單字後解鎖 Level 2
-        if (!profile.unlockedLevels) profile.unlockedLevels = [1];
-        if (profile.learnedWordIds.length >= ALL_WORD_IDS.length) {
-          if (!profile.unlockedLevels.includes(2)) profile.unlockedLevels.push(2);
-        }
-        if (profile.learnedWordIds.length >= ALL_WORD_IDS.length * 2) {
-          if (!profile.unlockedLevels.includes(3)) profile.unlockedLevels.push(3);
-        }
-        // 記錄每局紀錄
-        if (!profile.sessionHistory) profile.sessionHistory = [];
-        profile.sessionHistory.push({
-          level: wonLv, date: Date.now(),
-          learned: profile.learnedWordIds.length,
-          hammers: gameState.session.hammerCount || 0
-        });
-      }
-      const nextLv = gameState.player.level + 1;
-      if (nextLv <= 3 && !gameState.progress.unlockedLevels.includes(nextLv))
-        gameState.progress.unlockedLevels.push(nextLv);
-      gameState.session.wrongWords.forEach(id => {
-        if (!gameState.progress.totalWrongWords.includes(id))
-          gameState.progress.totalWrongWords.push(id);
+    // 防呆：確保陣列欄位存在
+    if (!gameState.progress.completedSessions) gameState.progress.completedSessions = [];
+    if (!gameState.progress.totalWrongWords)   gameState.progress.totalWrongWords   = [];
+    gameState.progress.completedSessions.push({ level: gameState.player.level, date: Date.now() });
+    // 更新玩家 profile
+    const profile = getCurrentProfile();
+    if (profile) {
+      if (!profile.learnedWordIds) profile.learnedWordIds = [];
+      if (!profile.wrongWordIds)   profile.wrongWordIds   = [];
+      if (!profile.unlockedLevels) profile.unlockedLevels = [1];
+      if (!profile.sessionHistory) profile.sessionHistory = [];
+      (gameState.session.wordGroups || []).flat().forEach(id => {
+        if (!profile.learnedWordIds.includes(id)) profile.learnedWordIds.push(id);
       });
-      clearSavedSession();
-      saveProgress();
-      // 角色解鎖檢查
+      (gameState.session.wrongWords || []).forEach(id => {
+        if (!profile.wrongWordIds.includes(id)) profile.wrongWordIds.push(id);
+      });
+      profile.sessionsCompleted = (profile.sessionsCompleted || 0) + 1;
+      profile.lastPlayed = Date.now();
+      if (profile.learnedWordIds.length >= ALL_WORD_IDS.length  && !profile.unlockedLevels.includes(2)) profile.unlockedLevels.push(2);
+      if (profile.learnedWordIds.length >= ALL_WORD_IDS.length * 2 && !profile.unlockedLevels.includes(3)) profile.unlockedLevels.push(3);
+      profile.sessionHistory.push({
+        level: gameState.player.level, date: Date.now(),
+        learned: profile.learnedWordIds.length,
+        hammers: gameState.session.hammerCount || 0,
+        words: (gameState.session.wordGroups || []).flat(),
+        wrong: [...(gameState.session.wrongWords || [])]
+      });
+    }
+    const nextLv = gameState.player.level + 1;
+    if (nextLv <= 3 && !(gameState.progress.unlockedLevels || []).includes(nextLv)) {
+      if (!gameState.progress.unlockedLevels) gameState.progress.unlockedLevels = [1];
+      gameState.progress.unlockedLevels.push(nextLv);
+    }
+    (gameState.session.wrongWords || []).forEach(id => {
+      if (!gameState.progress.totalWrongWords.includes(id)) gameState.progress.totalWrongWords.push(id);
+    });
+    clearSavedSession();
+    saveProgress();
+    // 角色解鎖檢查
+    try {
       const newUnlock = checkCharacterUnlocks();
       if (newUnlock) {
         saveProgress();
@@ -3800,9 +4229,14 @@ function showBossResult(playerWon, triggerMaze) {
     const allLearned = learnedCount >= totalWords;
     const bottomHtml = triggerMaze
       ? `<div style="font-size:13px;color:#FF8C00;font-weight:900;margin-bottom:10px">🏚️ 複習迷宮在等你！</div>
-         <button class="btn" style="background:#FF8C00;color:white;width:100%;font-size:18px;padding:14px"
-           onclick="showMazeIntro()">🍞 進入複習迷宮</button>`
-      : `<div style="font-size:13px;color:#aaa;margin-bottom:16px">3 秒後自動回首頁…</div>`;
+         <button class="btn" style="background:#FF8C00;color:white;width:100%;font-size:18px;padding:14px;margin-bottom:8px"
+           onclick="showMazeIntro()">🍞 進入複習迷宮</button>
+         <button class="btn" style="background:#eee;color:#333;font-size:15px;width:100%"
+           onclick="hideEventOverlay();resetGame();initStart()">🏠 回首頁</button>`
+      : `<button class="btn btn-primary" style="width:100%;font-size:18px;padding:14px;margin-bottom:8px"
+           onclick="hideEventOverlay();startGame()">🎮 再挑戰一次！</button>
+         <button class="btn" style="background:#eee;color:#333;font-size:15px;width:100%"
+           onclick="hideEventOverlay();resetGame();initStart()">🏠 回首頁</button>`;
     showEventOverlay(`
       <span class="event-icon" style="font-size:80px;animation:bounceIn 0.5s ease-out both">🏆</span>
       <div style="font-size:28px;font-weight:900;color:#FF6B35;margin-bottom:8px">🎉 恭喜過關！！</div>
@@ -3815,7 +4249,6 @@ function showBossResult(playerWon, triggerMaze) {
       </div>
       ${bottomHtml}`);
     spawnStars();
-    if (!triggerMaze) setTimeout(() => { hideEventOverlay(); resetGame(); initStart(); }, 3000);
   } else {
     const char = CHARACTER_EMOJIS[gameState.player.character] || '🐧';
     showEventOverlay(`
@@ -4557,6 +4990,69 @@ function parentMode() {
   document.getElementById('parent-overlay').style.display = 'flex';
   showParentDashboard();
 }
+function pmShowSession(playerIdx, sessionIdxStr) {
+  const container = document.getElementById(`pm-session-${playerIdx}`);
+  if (!container) return;
+  if (sessionIdxStr === '' || sessionIdxStr === undefined) { container.innerHTML = ''; return; }
+  const p = (window._pmPlayers || [])[playerIdx];
+  if (!p) return;
+  const hi = parseInt(sessionIdxStr, 10);
+  const h  = (p.sessionHistory || [])[hi];
+  if (!h) return;
+
+  const words = (h.words || []);
+  const wrongSet = new Set(h.wrong || []);
+  const hasWords = words.length > 0;
+
+  if (!hasWords) {
+    container.innerHTML = `<div style="font-size:13px;color:#aaa;text-align:center;padding:8px">
+      此局為舊存檔，無單字記錄</div>`;
+    return;
+  }
+
+  const level = h.level || 1;
+  const d = new Date(h.date).toLocaleDateString('zh-TW', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
+  const sessNum = hi + 1;
+
+  const wordRows = words.map(id => {
+    const w = ALL_WORDS[id];
+    if (!w) return '';
+    const isWrong = wrongSet.has(id);
+    const icon  = isWrong ? '❌' : '✅';
+    const color = isWrong ? '#c62828' : '#2E7D32';
+    const bg    = isWrong ? '#FFEBEE' : '#E8F5E9';
+    return `<div style="display:flex;align-items:center;gap:6px;background:${bg};
+                        border-radius:8px;padding:5px 8px;margin-bottom:4px">
+      <span style="font-size:18px">${w.emoji||''}</span>
+      <span style="font-weight:900;font-size:14px;color:${color};flex:1">${w.english}</span>
+      <span style="font-size:13px;color:#555">${w.chinese}</span>
+      <span style="font-size:15px">${icon}</span>
+    </div>`;
+  }).join('');
+
+  const wrongCount = words.filter(id => wrongSet.has(id)).length;
+  const safeId = JSON.stringify(p.id);
+  const safeWords = JSON.stringify(words);
+
+  container.innerHTML = `
+    <div style="background:white;border:1.5px solid #ddd;border-radius:12px;padding:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:900;color:#333">
+          第 ${sessNum} 局 · Lv${level} · ${d}
+        </div>
+        <div style="font-size:12px;color:${wrongCount>0?'#c62828':'#2E7D32'}">
+          ${wrongCount > 0 ? `❌ 錯 ${wrongCount} 字` : '✅ 全部答對！'}
+        </div>
+      </div>
+      <div style="max-height:180px;overflow-y:auto;margin-bottom:10px">${wordRows}</div>
+      <button onclick='startReviewSession(${safeWords}, ${level}, ${safeId})'
+        style="width:100%;padding:10px;background:#FF6B35;color:white;border:none;
+               border-radius:10px;font-size:15px;font-weight:900;font-family:inherit;cursor:pointer">
+        📖 複習這一局（${words.length} 個單字）
+      </button>
+    </div>`;
+}
+
 function showParentDashboard() {
   const players = [...(gameState.progress.players || [])].sort((a,b) => (b.lastPlayed||0)-(a.lastPlayed||0));
   const totalWords = ALL_WORD_IDS.length;
@@ -4566,10 +5062,11 @@ function showParentDashboard() {
   if (players.length === 0) {
     playersHtml = '<div style="color:#aaa;font-size:15px;text-align:center;padding:16px">還沒有冒險者資料</div>';
   } else {
-    playersHtml = players.map(p => {
+    // 把 players 存入全域，供 pmShowSession 使用
+    window._pmPlayers = players;
+    playersHtml = players.map((p, pi) => {
       const ce       = CHARACTER_EMOJIS[p.character] || '🐧';
       const done     = (p.learnedWordIds||[]).length;
-      const wrong    = (p.wrongWordIds||[]).length;
       const sess     = p.sessionsCompleted || 0;
       const pct      = Math.round(done / totalWords * 100);
       const unlocked = p.unlockedLevels || [1];
@@ -4577,19 +5074,17 @@ function showParentDashboard() {
       const lastDate = p.lastPlayed
         ? new Date(p.lastPlayed).toLocaleDateString('zh-TW', {year:'numeric',month:'numeric',day:'numeric'})
         : '未記錄';
-      const history  = (p.sessionHistory || []).slice(-5).reverse();
-      const histHtml = history.length > 0
-        ? history.map(h => {
-            const d = new Date(h.date).toLocaleDateString('zh-TW', {month:'numeric',day:'numeric'});
-            return `<span style="background:white;border-radius:8px;padding:2px 8px;font-size:12px;
-              margin:2px;display:inline-block;border:1px solid #ddd">
-              Lv${h.level} 過關 · ${d} · 🔨×${h.hammers}
-            </span>`;
-          }).join('')
-        : '<span style="font-size:12px;color:#aaa">尚無完成紀錄</span>';
-      const wrongTags = (p.wrongWordIds||[]).map(id => ALL_WORDS[id]
-        ? `<span style="background:#FFF9C4;border-radius:8px;padding:1px 7px;font-size:13px;
-                        margin:2px;display:inline-block">${ALL_WORDS[id].english}</span>` : '').join('');
+      const history = (p.sessionHistory || []);
+      // 下拉選單選項（最新在前）
+      const opts = history.length === 0
+        ? '<option value="">尚無完成紀錄</option>'
+        : ['<option value="">— 選擇關卡 —</option>',
+            ...history.map((h, hi) => {
+              const d = new Date(h.date).toLocaleDateString('zh-TW', {month:'numeric', day:'numeric'});
+              const hasWords = (h.words||[]).length > 0;
+              return `<option value="${history.length - 1 - hi}">第 ${history.length - hi} 局 · Lv${h.level} · ${d}${hasWords ? '' : ' (舊存檔)'}</option>`;
+            }).reverse()
+          ].join('');
       return `<div style="background:#F8F9FA;border-radius:16px;padding:12px;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
           <span style="font-size:32px">${ce}</span>
@@ -4606,15 +5101,16 @@ function showParentDashboard() {
                    padding:5px 10px;font-size:13px;font-weight:900;font-family:inherit;
                    cursor:pointer;flex-shrink:0">🗑️ 刪除</button>
         </div>
-        <div style="background:#e8f5e9;border-radius:8px;height:8px;margin-bottom:8px">
+        <div style="background:#e8f5e9;border-radius:8px;height:8px;margin-bottom:10px">
           <div style="background:#4CAF50;height:100%;border-radius:8px;width:${pct}%;transition:width 0.5s"></div>
         </div>
-        <div style="font-size:12px;color:#888;font-weight:700;margin-bottom:4px">📋 近期紀錄：</div>
-        <div style="line-height:2;margin-bottom:6px">${histHtml}</div>
-        ${wrong > 0
-          ? `<div style="font-size:12px;color:#888;font-weight:700;margin-bottom:4px">需加強（${wrong} 字）：</div>
-             <div style="line-height:2">${wrongTags}</div>`
-          : '<div style="font-size:12px;color:#2E7D32">✅ 沒有錯誤單字！太棒了！</div>'}
+        <div style="font-size:13px;font-weight:900;color:#333;margin-bottom:6px">📚 關卡學習紀錄</div>
+        <select onchange="pmShowSession(${pi}, this.value)"
+          style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:10px;
+                 font-size:14px;font-family:inherit;background:white;margin-bottom:8px">
+          ${opts}
+        </select>
+        <div id="pm-session-${pi}" style="margin-bottom:4px"></div>
       </div>`;
     }).join('');
   }
@@ -5189,6 +5685,70 @@ function clearAllProgress() {
   closeParentMode();
   resetGame();
   initStart();
+}
+
+// ===================================================
+// 安卓返回鍵攔截
+// ===================================================
+let _exitDialogActive = false;
+history.pushState({ game: true }, '', window.location.href);
+window.addEventListener('popstate', function() {
+  history.pushState({ game: true }, '', window.location.href);
+  if (_exitDialogActive) return;
+  const startScreen = document.getElementById('screen-start');
+  if (startScreen && startScreen.classList.contains('active')) return;
+  _showBackButtonDialog();
+});
+
+function _showBackButtonDialog() {
+  _exitDialogActive = true;
+  let petEmoji = '🐧';
+  try { petEmoji = getAnimalEmoji() || CHARACTER_EMOJIS[gameState.player.character] || '🐧'; } catch(e) {}
+  const name = gameState.player.name || '冒險者';
+  const overlay = document.createElement('div');
+  overlay.id = 'back-btn-dialog';
+  overlay.style.cssText = [
+    'position:fixed', 'inset:0', 'background:rgba(0,0,0,0.75)',
+    'z-index:10000', 'display:flex', 'align-items:center',
+    'justify-content:center', 'padding:20px'
+  ].join(';');
+  overlay.innerHTML = `
+    <div style="background:white;border-radius:28px;padding:28px 24px;
+                max-width:360px;width:100%;text-align:center;
+                box-shadow:0 8px 32px rgba(0,0,0,0.3)">
+      <div style="font-size:60px;margin-bottom:8px">${petEmoji}</div>
+      <div style="font-size:19px;font-weight:900;color:#333;margin-bottom:6px">
+        ${name}，確定要結束遊戲嗎？
+      </div>
+      <div style="font-size:13px;color:#888;margin-bottom:22px">
+        選「是」會自動存檔，下次可以繼續哦！
+      </div>
+      <div style="display:flex;gap:12px">
+        <button onclick="_backBtnConfirm(true)"
+          style="flex:1;background:#4CAF50;color:white;border:none;border-radius:50px;
+                 padding:14px;font-size:16px;font-weight:900;font-family:inherit;cursor:pointer;
+                 box-shadow:0 4px 0 #388E3C">
+          ✅ 是，存檔離開
+        </button>
+        <button onclick="_backBtnConfirm(false)"
+          style="flex:1;background:#eee;color:#555;border:none;border-radius:50px;
+                 padding:14px;font-size:16px;font-weight:900;font-family:inherit;cursor:pointer;
+                 box-shadow:0 4px 0 #bbb">
+          ❌ 否，繼續玩
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function _backBtnConfirm(exit) {
+  const overlay = document.getElementById('back-btn-dialog');
+  if (overlay) overlay.remove();
+  _exitDialogActive = false;
+  if (exit) {
+    saveSession();
+    goHome();
+  }
 }
 
 initStart();
