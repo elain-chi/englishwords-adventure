@@ -230,17 +230,13 @@ Chi 說「存檔」或「收工」時，**必須**依序完成以下步驟：
 
 1. 更新 `handoff.md`（本次做了什麼）
 2. 更新 memory 記憶檔（`project_game_state.md`）
-3. **推上 GitHub**（這個專案每次存檔都要推）：
+3. **推上 GitHub**（這個專案每次存檔都必須推）：
    ```bash
    git add index.html handoff.md
    git commit -m "收工存檔：[本次改動摘要]"
-   git push origin master
-   git checkout main
-   git merge master --no-edit
    git push origin main
-   git checkout master
    ```
-   > ⚠️ 本機開發在 `master`，GitHub Pages 部署 `main`，每次都要同步兩個分支
+   > ✅ 現在直接在 `main` 分支開發，push 到 `main` 即自動部署 GitHub Pages
 
 ---
 
